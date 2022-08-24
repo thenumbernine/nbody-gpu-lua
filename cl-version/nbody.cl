@@ -9,17 +9,17 @@ v'_i = a_i = F_i / m_i = sum_j~=i G m_j * (x_j - x_i) / |x_j - x_i|^3
 */
 
 /*
-const float gravityConstantInM3PerKgS2 = 6.67384e-11;	//G in terms of m^e / kg s^2
-const float lyrPerM = 1.0570234110814e-16;				//light years per meter
-const float sPerYr = 3.15569e7;							//seconds per year
-const float yrPerGyr = 2.25e8;							//galactic years per year
-const float sPerGyr = sPerYr * yrPerGyr;				//seconds per galactic year
-const float kgPerSm = 1.9891e30;						//kilograms per solar mass
-const float gravityConstantInLyr3PerSmGyr2 = gravityConstantInM3PerKgS2 * lyrPerM * lyrPerM * lyrPerM * sPerGyr * sPerGyr * kgPerSm;
+const real gravityConstantInM3PerKgS2 = 6.67384e-11;	//G in terms of m^e / kg s^2
+const real lyrPerM = 1.0570234110814e-16;				//light years per meter
+const real sPerYr = 3.15569e7;							//seconds per year
+const real yrPerGyr = 2.25e8;							//galactic years per year
+const real sPerGyr = sPerYr * yrPerGyr;				//seconds per galactic year
+const real kgPerSm = 1.9891e30;						//kilograms per solar mass
+const real gravityConstantInLyr3PerSmGyr2 = gravityConstantInM3PerKgS2 * lyrPerM * lyrPerM * lyrPerM * sPerGyr * sPerGyr * kgPerSm;
 */
-#define GRAVITY_CONSTANT	7903.8725760201f			//in case the above is beyond the precision of compile-time evaluation
-#define DT	.1f										//in galactic years
-#define EPS	1e+8f										//in light years
+#define GRAVITY_CONSTANT	7903.8725760201			//in case the above is beyond the precision of compile-time evaluation
+#define DT	.1										//in galactic years
+#define EPS	1e+8										//in light years
 
 /*
 m/M = r^3 / (r^2 + a^2)^3/2		<- m/M is our 0-1 random number
@@ -30,32 +30,32 @@ r^2 = a^2 / ((M/m)^2/3 - 1)
 r = a / ((M/m)^2/3 - 1)^1/2
 */
 kernel void initData(
-	global Object *objs,
-	global float *randBuffer)
+	global body_t * objs,
+	global real * randBuffer)
 {
 	int i = get_global_id(0);
 	if (i >= COUNT) return;
-	global Object *obj = objs + i;
+	global body_t * obj = objs + i;
 	
 	int j = i;
 #define FRAND()		(randBuffer[j=(j+104729)%COUNT])
 #define CRAND()		(FRAND() * 2. - 1.)
 #ifndef M_PI
-#define M_PI		3.1415926535898f
+#define M_PI		3.1415926535898
 #endif
-#define AVERAGE_MASS	2171.2552622753f	//average mass = .5 * (10^4 - 10^0) / log(10)
+#define AVERAGE_MASS	2171.2552622753	//average mass = .5 * (10^4 - 10^0) / log(10)
 #define TOTAL_MASS		(COUNT * AVERAGE_MASS)
-	obj->mass = mix(100.f, 10000.f, FRAND());//pow(10., FRAND() * 4.);
-	float density = .5f * sqrt(-log(1.f - FRAND()));
-	float cbrtMm = cbrt(TOTAL_MASS / FRAND());
-	float a = 100.f * INITIAL_RADIUS / sqrt(sqrt(2.f) - 1.f);	//mystery: why scale by 100?
-	float radius = a / sqrt(cbrtMm * cbrtMm - 1.f);
+	obj->mass = mix(100., 10000., FRAND());//pow(10., FRAND() * 4.);
+	real density = .5 * sqrt(-log(1. - FRAND()));
+	real cbrtMm = cbrt(TOTAL_MASS / FRAND());
+	real a = 100. * INITIAL_RADIUS / sqrt(sqrt(2.) - 1.);	//mystery: why scale by 100?
+	real radius = a / sqrt(cbrtMm * cbrtMm - 1.);
 	{
-		float phi = 2.f * M_PI * FRAND();
-		float theta = acos(2.f * FRAND() - 1.f);
+		real phi = 2. * M_PI * FRAND();
+		real theta = acos(2. * FRAND() - 1.);
 		
-		//float3 dir = _float3(cos(phi) * sin(theta), sin(phi) * sin(theta), cos(theta));
-		float3 dir;
+		//real3 dir = _real3(cos(phi) * sin(theta), sin(phi) * sin(theta), cos(theta));
+		real3 dir;
 		dir.x = cos(phi) * sin(theta);
 		dir.y = sin(phi) * sin(theta);
 		dir.z = cos(theta);
@@ -67,26 +67,26 @@ kernel void initData(
 	}
 
 	{
-		real x = 0.f;
-		real y = .1f;
-		while (y > x * x * pow(1.f - x * x, 3.5f)) {
+		real x = 0.;
+		real y = .1;
+		while (y > x * x * pow(1. - x * x, 3.5)) {
 			x = FRAND();
-			y = .1f * FRAND();
+			y = .1 * FRAND();
 		}
-		float velocity = x * sqrt(sqrt(4.f / (1.f + radius * radius)));
-		float phi = 2.f * M_PI * FRAND();
-		float theta = acos(2.f * FRAND() - 1.f);
+		real velocity = x * sqrt(sqrt(4. / (1. + radius * radius)));
+		real phi = 2. * M_PI * FRAND();
+		real theta = acos(2. * FRAND() - 1.);
 		
-		//float3 dir = (float3)(cos(phi) * sin(theta), sin(phi) * sin(theta), cos(theta));
-		float3 dir;
+		//real3 dir = (real3)(cos(phi) * sin(theta), sin(phi) * sin(theta), cos(theta));
+		real3 dir;
 		dir.x = cos(phi) * sin(theta);
 		dir.y = sin(phi) * sin(theta);
 		dir.z = cos(theta);
 		
-		//obj->vel = dir * (velocity * INITIAL_RADIUS * 5.f);
-		obj->vel.x = dir.x * (velocity * INITIAL_RADIUS * 5.f);
-		obj->vel.y = dir.y * (velocity * INITIAL_RADIUS * 5.f);
-		obj->vel.z = dir.z * (velocity * INITIAL_RADIUS * 5.f);
+		//obj->vel = dir * (velocity * INITIAL_RADIUS * 5.);
+		obj->vel.x = dir.x * (velocity * INITIAL_RADIUS * 5.);
+		obj->vel.y = dir.y * (velocity * INITIAL_RADIUS * 5.);
+		obj->vel.z = dir.z * (velocity * INITIAL_RADIUS * 5.);
 	}
 #undef FRAND
 }
@@ -106,13 +106,13 @@ w = sqrt(G M / r^3)
 */
 
 kernel void update(
-	global Object *newObjs,
-	global const Object *oldObjs)
+	global body_t *newObjs,
+	global const body_t *oldObjs)
 {
 	int i = get_global_id(0);
 	if (i >= COUNT) return;
 
-	global Object *newObj = newObjs + i;
+	global body_t *newObj = newObjs + i;
 	*newObj = oldObjs[i];
 
 	//newObj->pos += newObj->vel * DT;
@@ -120,7 +120,7 @@ kernel void update(
 	newObj->pos.y += newObj->vel.y * DT;
 	newObj->pos.z += newObj->vel.z * DT;
 	
-	global const Object *oldObj = oldObjs;
+	global const body_t *oldObj = oldObjs;
 	for (int j = 0; j < COUNT; ++j, ++oldObj) {
 		
 		//real3 dx = newObj->pos - oldObj->pos;
@@ -129,7 +129,8 @@ kernel void update(
 		dx.y = newObj->pos.y - oldObj->pos.y;
 		dx.z = newObj->pos.z - oldObj->pos.z;
 		
-		real invLen = rsqrt(dot(dx,dx) + EPS);
+		//real invLen = rsqrt(dot(dx,dx) + EPS);
+		real invLen = rsqrt(dx.x * dx.x + dx.y * dx.y + dx.z * dx.z + EPS);
 		real invLen3 = invLen * invLen * invLen;
 		
 		//real3 gravity = -dx * invLen3;
@@ -145,15 +146,19 @@ kernel void update(
 	}
 }
 
+//#include <stdio.h>
+
 kernel void copyToGL(
-	global float4 *dsts,
-	global const Object *srcObjs)
+	global real4 *dsts,
+	global const body_t *srcObjs)
 {
 	int i = get_global_id(0);
 	if (i >= COUNT) return;
-
-	global float4 *dst = dsts + i;
-	global const Object *srcObj = srcObjs + i;
+//printf("copyToGL %lu\n", i);
+//printf("dsts %p\n", dsts);
+//printf("srcObjs %p\n", srcObjs);
+	global real4 *dst = dsts + i;
+	global const body_t *srcObj = srcObjs + i;
 	//dst->xyz = srcObj->pos.xyz / INITIAL_RADIUS;
 	dst->x = srcObj->pos.x / INITIAL_RADIUS;
 	dst->y = srcObj->pos.y / INITIAL_RADIUS;
