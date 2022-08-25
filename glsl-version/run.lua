@@ -120,6 +120,7 @@ gravConst = 1e-10
 
 displayScale = 1000
 pointSize = 2
+gravDistEpsilon = 1e-7
 
 r0min = 1
 r0max = 2
@@ -286,7 +287,7 @@ void main() {
 	simVelShader = GLKernelProgram{
 		texs = {'postex','veltex'};
 		code = template([[
-uniform float dt, gravConst;
+uniform float dt, gravConst, gravDistEpsilon;
 void main() {
 	vec4 vpos = texture2D(postex, pos);
 	vec4 vvel = texture2D(veltex, pos);
@@ -298,7 +299,7 @@ void main() {
 			float othermass = otherpos.w;
 			vec3 del = otherpos.xyz - vpos.xyz;
 			float len = length(del);
-			len = max(len, 1e-7);
+			len = max(len, gravDistEpsilon);
 			float invlen = 1. / len;
 			del *= invlen;
 			del *= invlen;
@@ -396,11 +397,14 @@ glreport'here'
 	gl.glLoadIdentity()
 glreport'here'	
 	if update then
+		-- TODO instead of swapping color attachments
+		-- how about binding the current pos and vel at the same time?
+		-- and combining their update shaders?
 		velTexs:swap()
 		velTexs:draw{
 			shader=simVelShader,
 			texs={posTexs:cur(), velTexs:prev()},
-			uniforms={dt=dt, gravConst=gravConst},
+			uniforms={dt=dt, gravConst=gravConst, gravDistEpsilon=gravDistEpsilon},
 		}
 		posTexs:swap()
 		posTexs:draw{
@@ -576,6 +580,7 @@ function App:updateGUI()
 	ig.luatableInputFloat('pointSize', _G, 'pointSize')
 	ig.luatableInputFloat('r0min', _G, 'r0min')
 	ig.luatableInputFloat('r0max', _G, 'r0max')
+	ig.luatableInputFloat('gravDistEpsilon', _G, 'gravDistEpsilon')
 end
 
 App():run()
