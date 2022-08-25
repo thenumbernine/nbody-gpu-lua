@@ -111,9 +111,10 @@ G = 4.81170511702339376292059114348376169800758361816406e-1
 
 so our "gravitation parameter" G_orbit = G * mass_in_kg * orbit_time_in_s^2 / orbit_dist_in_m^3
 --]]
-local dt = .001
+local dt = .01
 --local gravConst = 4.8088480226311e-10	-- in sun units
-local gravConst = .001
+local gravConst = 1.185609940161901e-4	-- Earth orbit units
+--local gravConst = .5	-- Moon orbit units
 
 local function reset()
 	do
@@ -142,6 +143,8 @@ local function reset()
 
 	local posData = vector('vec4f_t', count)
 	local velData = vector('vec4f_t', count)
+
+	local totalMass = 0
 	local posv = ffi.cast('vec4f_t*', posData.v)	-- TODO cast within vector:begin() ?
 	local velv = ffi.cast('vec4f_t*', velData.v)	-- TODO cast within vector:begin() ?
 	for i=0,count-1 do
@@ -165,13 +168,30 @@ local function reset()
 		posv[0].x = math.cos(phi) * r
 		posv[0].y = math.sin(phi) * r
 		posv[0].z = z
-		local mass = math.random() + .1
+		local mass = 10^(math.random() * 2 - 1)
 		posv[0].w = mass
+		totalMass = totalMass + mass
 --]]
-
+		
+		posv = posv + 1
+		velv = velv + 1
+	end
+	
+	local posv = ffi.cast('vec4f_t*', posData.v)	-- TODO cast within vector:begin() ?
+	local velv = ffi.cast('vec4f_t*', velData.v)	-- TODO cast within vector:begin() ?
+	for i=0,count-1 do
+		-- Kepler's 1-2-3 law
 		-- G m_sum = omega^2 r^3
-		-- omega = angular velocity, s.t. x = r cis (omega t), v = r omega cis (omega t)
-		local omega = 1 * 2 * math.pi * math.sqrt(mass / r)
+		local r = math.sqrt(posv[0].x * posv[0].x + posv[0].y * posv[0].y)
+		
+		-- P^2 = (2 pi)^2 / (G (m1 + m2)) a^3
+		-- (P / 2 pi)^2 = a^3 / (G (m1 + m2))
+		-- G (m1 + m2) = (2 pi / P)^2 * a^3
+		-- pos = r cis (t 2 pi / P) = r cis (omega t) for omega = 2 pi / P
+		-- G (m1 + m2) = omega^2 * a^3
+		-- vel = i r omega cis (omega t) = i omega pos
+		-- by the 1-2-3 law: G (m1 + m2) = omega^2 * a^3 => omega = sqrt(G (m1 + m2) / a^3)
+		local omega = math.sqrt(gravConst * totalMass / (r * r * r))
 		velv[0].x = -omega * posv[0].y
 		velv[0].y = omega * posv[0].x
 		velv[0].z = 0
@@ -270,7 +290,7 @@ void main() {
 			float othermass = otherpos.w;
 			vec3 del = otherpos.xyz - vpos.xyz;
 			float len = length(del);
-			len = max(len, .00001);
+			len = max(len, 1e-7);
 			float invlen = 1. / len;
 			del *= invlen;
 			del *= invlen;
@@ -293,14 +313,10 @@ void main() {
 	displayShader = GLProgram{
 		vertexCode = [[
 #version 460
-
 uniform sampler2D posTex, velTex;
 uniform mat4 modelViewProjectionMatrix;
-
 in vec2 uv;
-
 out float magn;
-
 void main() {
 	vec4 pos4 = texture(posTex, uv);
 	vec4 vel = texture(velTex, uv);
@@ -311,15 +327,10 @@ void main() {
 ]],
 		fragmentCode = [[
 #version 460
-
 #define	magnscale	.1
-
-in float magn;
-
 uniform sampler1D gradTex;
-
+in float magn;
 out vec4 color;
-
 void main() {
 	color = texture(gradTex, magn * magnscale);
 }
@@ -457,13 +468,13 @@ glreport'here'
 	gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
 glreport'here'	
 --	displayShader.vao:bind()
-glreport'here'	
+--glreport'here'	
 	gl.glVertexPointer(2, gl.GL_FLOAT, ffi.sizeof'vec2f_t', nil)
 glreport'here'	
 	gl.glDrawArrays(gl.GL_POINTS, 0, count)
 glreport'here'	
 --	displayShader.vao:unbind()
-glreport'here'	
+--glreport'here'	
 	gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
 glreport'here'	
 	uvBuf:unbind()
