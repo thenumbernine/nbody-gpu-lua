@@ -16,6 +16,7 @@ local GLKernelProgram = require 'gl.kernelprogram'
 local glreport = require 'gl.report'
 local gl = require 'gl'
 local clnumber = require 'cl.obj.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
+local ig = require 'imgui'
 local vec2i = require 'vec-ffi.vec2i'
 local vec2f = require 'vec-ffi.vec2f'
 local vec3f = require 'vec-ffi.vec3f'
@@ -111,10 +112,17 @@ G = 4.81170511702339376292059114348376169800758361816406e-1
 
 so our "gravitation parameter" G_orbit = G * mass_in_kg * orbit_time_in_s^2 / orbit_dist_in_m^3
 --]]
-local dt = .01
---local gravConst = 4.8088480226311e-10	-- in sun units
-local gravConst = 1.185609940161901e-4	-- Earth orbit units
---local gravConst = .5	-- Moon orbit units
+dt = 1
+--gravConst = 4.8088480226311e-10	-- in sun units
+gravConst = 1e-10
+--gravConst = 1.185609940161901e-4	-- Earth orbit units
+--gravConst = .5	-- Moon orbit units
+
+displayScale = 1000
+pointSize = 2
+
+r0min = 1
+r0max = 2
 
 local function reset()
 	do
@@ -162,9 +170,9 @@ local function reset()
 		return v[1], v[2], v[3], 1
 --]]
 -- [[
-		local r = math.random() * 10
+		local r = math.random() * (r0max - r0min) + r0min
 		local phi = math.random() * 2 * math.pi
-		local z = (math.random() * 2 - 1) * math.exp(-r*r)
+		local z = .1 * (math.random() * 2 - 1) * math.exp(-r*r)
 		posv[0].x = math.cos(phi) * r
 		posv[0].y = math.sin(phi) * r
 		posv[0].z = z
@@ -263,22 +271,22 @@ function App:initGL(...)
 
 	simPosShader = GLKernelProgram{
 		texs = {'postex', 'veltex'};
-		code = template([[
+		code = [[
+uniform float dt;
 void main() {
 	vec4 vpos = texture2D(postex, pos);
 	vec4 vvel = texture2D(veltex, pos);
-	vpos.xyz += vvel.xyz * <?=dt?>;
+	vpos.xyz += vvel.xyz * dt;
 	// preserve vpos.w == mass
 	gl_FragColor = vpos;
 }
-]],		{
-			dt = clnumber(dt),
-		}),
+]],
 	}
 
 	simVelShader = GLKernelProgram{
 		texs = {'postex','veltex'};
 		code = template([[
+uniform float dt, gravConst;
 void main() {
 	vec4 vpos = texture2D(postex, pos);
 	vec4 vvel = texture2D(veltex, pos);
@@ -296,16 +304,14 @@ void main() {
 			del *= invlen;
 			del *= invlen;
 			del *= othermass;
-			del *= <?=gravConst?>;
+			del *= gravConst;
 			accumforce += del;
 		}
 	}
-	vvel.xyz += accumforce * <?=dt?>;
+	vvel.xyz += accumforce * dt;
 	gl_FragColor = vvel;
 }
 ]],		{
-			dt = clnumber(dt),
-			gravConst = clnumber(gravConst),
 			fieldDim = clnumber(fieldDim),
 		}),
 	}
@@ -321,18 +327,18 @@ void main() {
 	vec4 pos4 = texture(posTex, uv);
 	vec4 vel = texture(velTex, uv);
 	vec4 pos = vec4(pos4.xyz, 1.);
-	magn = length(pos.xyz);
+	magn = length(vel.xyz);//length(pos.xyz);
 	gl_Position = modelViewProjectionMatrix * pos;
 }
 ]],
 		fragmentCode = [[
 #version 460
-#define	magnscale	.1
+uniform float displayScale;
 uniform sampler1D gradTex;
 in float magn;
 out vec4 color;
 void main() {
-	color = texture(gradTex, magn * magnscale);
+	color = texture(gradTex, magn * displayScale);
 }
 ]],
 		uniforms = {
@@ -351,11 +357,6 @@ void main() {
 		},
 		--]]
 	}
-	--[[
-	displayShader:setAttrs{
-		uv = uvAttr,
-	}
-	--]]
 	displayShader:useNone()
 
 	gl.glDisable(gl.GL_DEPTH_TEST)
@@ -397,13 +398,15 @@ glreport'here'
 	if update then
 		velTexs:swap()
 		velTexs:draw{
-			shader=simVelShader;
-			texs={posTexs:cur(), velTexs:prev()};
+			shader=simVelShader,
+			texs={posTexs:cur(), velTexs:prev()},
+			uniforms={dt=dt, gravConst=gravConst},
 		}
 		posTexs:swap()
 		posTexs:draw{
-			shader=simPosShader;
-			texs={posTexs:prev(), velTexs:prev()};
+			shader=simPosShader,
+			texs={posTexs:prev(), velTexs:prev()},
+			uniforms={dt=dt},
 		}
 	end
 glreport'here'	
@@ -440,12 +443,13 @@ glreport'here'
 	gl.glGetFloatv(gl.GL_PROJECTION_MATRIX, projectionMatrix.ptr)
 	modelViewProjectionMatrix:mul(projectionMatrix, modelViewMatrix)
 
-	gl.glPointSize(2)
+	gl.glPointSize(pointSize)
 glreport'here'	
 
 	displayShader:use()
 glreport'here'	
 	gl.glUniformMatrix4fv(displayShader.uniforms.modelViewProjectionMatrix.loc, 1, false, modelViewProjectionMatrix.ptr)
+	gl.glUniform1f(displayShader.uniforms.displayScale.loc, displayScale)
 glreport'here'	
 	
 	posTexs:cur():bind(0)
@@ -563,6 +567,15 @@ function App:event(event, ...)
 			reset()
 		end
 	end	
+end
+
+function App:updateGUI()
+	ig.luatableInputFloat('dt', _G, 'dt')
+	ig.luatableInputFloat('G', _G, 'gravConst')
+	ig.luatableInputFloat('displayScale', _G, 'displayScale')	-- TODO could auto determine if I wanted to add some reduce kernels ... migth do reduce kernels just for the gravitation COM ...
+	ig.luatableInputFloat('pointSize', _G, 'pointSize')
+	ig.luatableInputFloat('r0min', _G, 'r0min')
+	ig.luatableInputFloat('r0max', _G, 'r0max')
 end
 
 App():run()
