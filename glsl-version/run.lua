@@ -3,7 +3,6 @@ local ffi = require 'ffi'
 local sdl = require 'ffi.sdl'
 local math = require 'ext.math'
 local table = require 'ext.table'
-local class = require 'ext.class'
 local vector = require 'ffi.cpp.vector'
 local template = require 'template'
 local GLTex1D = require 'gl.tex2d'
@@ -25,7 +24,7 @@ local vec4f = require 'vec-ffi.vec4f'
 local matrix_ffi = require 'matrix.ffi'
 matrix_ffi.real = 'float'	-- default matrix_ffi type
 
-local App = class(require 'glapp.orbit'(require 'imguiapp'))
+local App = require 'imguiapp.withorbit'()
 
 local fieldDim = 64
 local count = fieldDim * fieldDim
@@ -574,13 +573,15 @@ function App:event(event, ...)
 end
 
 function App:updateGUI()
-	ig.luatableInputFloat('dt', _G, 'dt')
-	ig.luatableInputFloat('G', _G, 'gravConst')
-	ig.luatableInputFloat('displayScale', _G, 'displayScale')	-- TODO could auto determine if I wanted to add some reduce kernels ... migth do reduce kernels just for the gravitation COM ...
-	ig.luatableInputFloat('pointSize', _G, 'pointSize')
-	ig.luatableInputFloat('r0min', _G, 'r0min')
-	ig.luatableInputFloat('r0max', _G, 'r0max')
-	ig.luatableInputFloat('gravDistEpsilon', _G, 'gravDistEpsilon')
+	ig.luatableInputFloatAsText('dt', _G, 'dt')
+	ig.luatableInputFloatAsText('G', _G, 'gravConst')
+	ig.luatableInputFloatAsText('displayScale', _G, 'displayScale')	-- TODO could auto determine if I wanted to add some reduce kernels ... migth do reduce kernels just for the gravitation COM ...
+	ig.luatableInputFloatAsText('pointSize', _G, 'pointSize')
+	ig.luatableInputFloatAsText('r0min', _G, 'r0min')
+	ig.luatableInputFloatAsText('r0max', _G, 'r0max')
+	ig.luatableInputFloatAsText('gravDistEpsilon', _G, 'gravDistEpsilon')
+	ig.luatableInputFloatAsText('znear', self.view, 'znear')
+	ig.luatableInputFloatAsText('zfar', self.view, 'zfar')
 end
 
 App():run()

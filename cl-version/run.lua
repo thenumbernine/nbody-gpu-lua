@@ -2,7 +2,6 @@
 
 local ffi = require 'ffi'
 local vector = require 'ffi.cpp.vector'
-local class = require 'ext.class'
 local table = require 'ext.table'
 local io = require 'ext.io'
 local GLProgram = require 'gl.program'
@@ -15,7 +14,7 @@ local vec2i = require 'vec-ffi.vec2i'
 local vec3f = require 'vec-ffi.vec3f'
 local vec4f = require 'vec-ffi.vec4f'
 
-local App = class(require 'glapp.orbit'(require 'imguiapp'))
+local App = require 'imguiapp.withorbit'()
 
 --local count = 16
 local count = 2048
