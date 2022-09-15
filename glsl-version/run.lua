@@ -370,31 +370,20 @@ local projectionMatrix = matrix_ffi.zeros(4,4)
 local modelViewProjectionMatrix = matrix_ffi.zeros(4,4)
 
 function App:update(...)
-glreport'here'	
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
-glreport'here'	
 
 
 --	gl.glEnable(gl.GL_TEXTURE_2D)
 	
 	gl.glGetFloatv(gl.GL_VIEWPORT, viewport.s)
-glreport'here'	
 	gl.glViewport(0,0,fieldDim,fieldDim)
-glreport'here'	
 	gl.glMatrixMode(gl.GL_PROJECTION)
-glreport'here'	
 	gl.glPushMatrix()
-glreport'here'	
 	gl.glLoadIdentity()
-glreport'here'	
 	gl.glOrtho(0,1,0,1,-1,1)
-glreport'here'	
 	gl.glMatrixMode(gl.GL_MODELVIEW)
-glreport'here'	
 	gl.glPushMatrix()
-glreport'here'	
 	gl.glLoadIdentity()
-glreport'here'	
 	if update then
 		-- TODO instead of swapping color attachments
 		-- how about binding the current pos and vel at the same time?
@@ -412,17 +401,11 @@ glreport'here'
 			uniforms={dt=dt},
 		}
 	end
-glreport'here'	
 	gl.glViewport(viewport:unpack())
-glreport'here'	
 	gl.glMatrixMode(gl.GL_PROJECTION)
-glreport'here'	
 	gl.glPopMatrix()
-glreport'here'	
 	gl.glMatrixMode(gl.GL_MODELVIEW)
-glreport'here'	
 	gl.glPopMatrix()
-glreport'here'	
 
 --	gl.glDisable(gl.GL_TEXTURE_2D)
 
@@ -447,19 +430,14 @@ glreport'here'
 	modelViewProjectionMatrix:mul(projectionMatrix, modelViewMatrix)
 
 	gl.glPointSize(pointSize)
-glreport'here'	
 
 	displayShader:use()
-glreport'here'	
 	gl.glUniformMatrix4fv(displayShader.uniforms.modelViewProjectionMatrix.loc, 1, false, modelViewProjectionMatrix.ptr)
 	gl.glUniform1f(displayShader.uniforms.displayScale.loc, displayScale)
-glreport'here'	
 	
 	posTexs:cur():bind(0)
---glreport'here'	
-	velTexs:cur():bind(1)
---glreport'here'	
-	gradTex:bind(2)
+--	velTexs:cur():bind(1)
+--	gradTex:bind(2)
 
 --[[
 	uvBuf:bind()
@@ -471,40 +449,27 @@ glreport'here'
 --]]
 -- [[
 	uvBuf:bind()
-glreport'here'	
 	gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
-glreport'here'	
 --	displayShader.vao:bind()
---glreport'here'	
-	gl.glVertexPointer(2, gl.GL_FLOAT, ffi.sizeof'vec2f_t', nil)
-glreport'here'	
+--	gl.glVertexPointer(2, gl.GL_FLOAT, ffi.sizeof'vec2f_t', nil)
 	gl.glDrawArrays(gl.GL_POINTS, 0, count)
-glreport'here'	
 --	displayShader.vao:unbind()
---glreport'here'	
-	gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
-glreport'here'	
+--	gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
 	uvBuf:unbind()
-glreport'here'	
 --]]
 --[[
-glreport'here'	
 	gl.glBegin(gl.GL_POINTS)
 	for i=0,count-1 do
 		gl.glVertex2f(uvCPUMem[0 + 2 * i], uvCPUMem[1 + 2 * i])
 	end
 	gl.glEnd()
-glreport'here'	
 --]]
 
 	GLTex1D:unbind(2)
 	GLTex2D:unbind(1)
---glreport'here'	
-	GLTex2D:unbind(0)
---glreport'here'	
-
+--	GLTex2D:unbind(0)
+--
 	displayShader:useNone()
-glreport'here'	
 	gl.glPointSize(1)
 glreport'here'	
 
