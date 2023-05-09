@@ -53,7 +53,7 @@ function App:initGL(...)
 		[[
 typedef vec3f_t real3;
 
-typedef struct {
+typedef struct body_t {
 	real3 pos;
 	real3 vel;
 	real mass;
