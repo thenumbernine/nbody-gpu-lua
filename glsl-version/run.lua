@@ -365,9 +365,9 @@ end
 
 local viewport = vec4f()
 
-local modelViewMatrix = matrix_ffi.zeros(4,4)
-local projectionMatrix = matrix_ffi.zeros(4,4)
-local modelViewProjectionMatrix = matrix_ffi.zeros(4,4)
+local modelViewMatrix = matrix_ffi.zeros{4,4}
+local projectionMatrix = matrix_ffi.zeros{4,4}
+local modelViewProjectionMatrix = matrix_ffi.zeros{4,4}
 
 function App:update(...)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
@@ -549,4 +549,4 @@ function App:updateGUI()
 	ig.luatableInputFloatAsText('zfar', self.view, 'zfar')
 end
 
-App():run()
+return App():run()
