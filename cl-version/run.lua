@@ -3,7 +3,7 @@
 local ffi = require 'ffi'
 local vector = require 'ffi.cpp.vector'
 local table = require 'ext.table'
-local file = require 'ext.file'
+local path = require 'ext.path'
 local GLProgram = require 'gl.program'
 local GLTex2D = require 'gl.tex2d'
 local GLArrayBuffer = require 'gl.arraybuffer'
@@ -71,7 +71,7 @@ typedef struct body_t {
 			headerCode,
 			'#define COUNT '..count,
 			'#define INITIAL_RADIUS 50000',
-			assert(file'nbody.cl':read()),
+			assert(path'nbody.cl':read()),
 		}:concat'\n',
 	}
 	self.program:compile()
