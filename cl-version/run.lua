@@ -141,10 +141,10 @@ typedef struct body_t {
 		data = particleTexData.v,
 		generateMipmap = true,
 	}
-	self.particleTex:unbind()
+		:unbind()
 
 --	local gradientTex = require 'gl.gradienttex'(256)
---	gradientTex:unbind()
+--		:unbind()
 
 	self.particleShader = GLProgram{
 		vertexCode = [[
@@ -180,7 +180,7 @@ void main() {
 			tex = 0,
 		},
 	}
-	self.particleShader:useNone()
+		:useNone()
 end
 
 function App:update(...)
@@ -271,9 +271,10 @@ self.objsMem
 	gl.glDisable(gl.GL_POINT_SPRITE)
 
 	--[[ if we're using fbo post-processing ... TODO needs gradient too ... and blur filter
-	self.postTex:bind()
-	self.postTex:generateMipmap()
-	self.postTex:unbind()
+	self.postTex
+		:bind()
+		:generateMipmap()
+		:unbind()
 	--]]
 
 --self:requestExit()
