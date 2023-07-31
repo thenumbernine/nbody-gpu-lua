@@ -1,6 +1,6 @@
 #!/usr/bin/env luajit
 local ffi = require 'ffi'
-local sdl = require 'ffi.sdl'
+local sdl = require 'ffi.req' 'sdl'
 local math = require 'ext.math'
 local table = require 'ext.table'
 local vector = require 'ffi.cpp.vector'
