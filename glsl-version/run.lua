@@ -356,8 +356,7 @@ void main() {
 			uv = 0,
 		},
 		--]]
-	}
-	displayShader:useNone()
+	}:useNone()
 
 	gl.glDisable(gl.GL_DEPTH_TEST)
 	gl.glDisable(gl.GL_CULL_FACE)
