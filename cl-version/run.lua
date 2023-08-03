@@ -179,8 +179,7 @@ void main() {
 		uniforms = {
 			tex = 0,
 		},
-	}
-		:useNone()
+	}:useNone()
 end
 
 function App:update(...)
