@@ -138,7 +138,7 @@ local function reset()
 			size = count * ffi.sizeof'vec2f_t',
 			data = uvCPUMem,
 			usage = gl.GL_STATIC_DRAW,
-		}
+		}:unbind()
 		uvAttr = GLAttribute{
 			buffer = uvBuv,
 			size = 2,

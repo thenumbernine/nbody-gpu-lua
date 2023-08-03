@@ -38,7 +38,10 @@ function App:initGL(...)
 		verbose = true,
 	}
 
-	self.positionVBO = GLArrayBuffer{size = ffi.sizeof'vec4f_t' * count, usage = gl.GL_DYNAMIC_DRAW}
+	self.positionVBO = GLArrayBuffer{
+		size = ffi.sizeof'vec4f_t' * count,
+		usage = gl.GL_DYNAMIC_DRAW,
+	}:unbind()
 
 	if self.env.useGLSharing then
 		error"haven't got gl sharing yet"
@@ -223,7 +226,10 @@ self.objsMem
 --]]
 
 
-		self.positionVBO:updateData(0, ffi.sizeof'vec4f_t' * count, self.posCPUMem.v)
+		self.positionVBO
+			:bind()
+			:updateData(0, ffi.sizeof'vec4f_t' * count, self.posCPUMem.v)
+			:unbind()
 		gl.glFinish()
 	end
 
