@@ -22,7 +22,7 @@ local count = 2048
 App.viewDist = 1
 
 
-require 'cl-cpu'.clcpu_build = 'debug'	--fixes problems? 
+--require 'cl-cpu'.clcpu_build = 'debug'	--fixes problems? 
 
 function App:initGL(...)
 	App.super.initGL(self, ...)
@@ -52,7 +52,6 @@ function App:initGL(...)
 	end
 
 	local headerCode = table{
-		vec3f.typeCode,
 		[[
 typedef vec3f_t real3;
 
@@ -71,6 +70,7 @@ typedef struct body_t {
 
 	self.program = self.env:program{
 		code = table{
+			vec3f.code,
 			headerCode,
 			'#define COUNT '..count,
 			'#define INITIAL_RADIUS 50000',
