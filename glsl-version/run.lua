@@ -3,7 +3,7 @@ local ffi = require 'ffi'
 local sdl = require 'ffi.req' 'sdl'
 local math = require 'ext.math'
 local table = require 'ext.table'
-local vector = require 'ffi.cpp.vector'
+local vector = require 'ffi.cpp.vector-lua'
 local template = require 'template'
 local GLTex1D = require 'gl.tex2d'
 local GLTex2D = require 'gl.tex2d'
@@ -92,7 +92,7 @@ using new units ...
 1 um = 1 solar mass = 1.989e+30 kg
 G = 8.2584809222832e-12 ux^3 / (um ut^2)	-- using units of sun orbit distance, sun orbit time, and sun mass ... same.  I bet Kepler has a law about this.
 
-what if we use the sun's orbit distance also 
+what if we use the sun's orbit distance also
 1 ux = 2.58e+4 lyr = 2.4408684619258e+20 m		-- sun orbit distance in milky way ... https://www.universetoday.com/148997/a-new-measurement-puts-the-sun-2000-light-years-closer-to-the-center-of-the-milky-way/
 G = 4.8088480226311e-10 ux^3 / (um ut^2)	-- it gets closer to G
 sun velocity = 2.51e+5 m/s = 7.4638198510813 ux / ut
@@ -162,7 +162,7 @@ local function reset()
 --[[
 		local v = {math.random()*2-1, math.random()*2-1, math.random()*2-1}
 		local l = v[1]*v[1] + v[2]*v[2] + v[3]*v[3]
-		if l >= 1 then 
+		if l >= 1 then
 			v[1] = v[1] / l
 			v[2] = v[2] / l
 			v[3] = v[3] / l
@@ -180,18 +180,18 @@ local function reset()
 		posv[0].w = mass
 		totalMass = totalMass + mass
 --]]
-		
+
 		posv = posv + 1
 		velv = velv + 1
 	end
-	
+
 	local posv = ffi.cast('vec4f_t*', posData.v)	-- TODO cast within vector:begin() ?
 	local velv = ffi.cast('vec4f_t*', velData.v)	-- TODO cast within vector:begin() ?
 	for i=0,count-1 do
 		-- Kepler's 1-2-3 law
 		-- G m_sum = omega^2 r^3
 		local r = math.sqrt(posv[0].x * posv[0].x + posv[0].y * posv[0].y)
-		
+
 		-- P^2 = (2 pi)^2 / (G (m1 + m2)) a^3
 		-- (P / 2 pi)^2 = a^3 / (G (m1 + m2))
 		-- G (m1 + m2) = (2 pi / P)^2 * a^3
@@ -204,7 +204,7 @@ local function reset()
 		velv[0].y = omega * posv[0].x
 		velv[0].z = 0
 		velv[0].w = 0
-	
+
 		posv = posv + 1
 		velv = velv + 1
 	end
@@ -221,7 +221,7 @@ messageCallback = function(
 	severity,	-- GLenum
 	length,		-- GLsizei
 	msg,		-- GLchar const *
-	userParam	-- void const * 
+	userParam	-- void const *
 )
 	print('gl error', source, gltype, id, severity, ffi.string(msg, length))
 end
@@ -240,7 +240,7 @@ function App:initGL(...)
 
 	reset()
 
-	gradTex = require 'gl.gradienttex'(256, 
+	gradTex = require 'gl.gradienttex'(256,
 --[[ rainbow or heatmap or whatever
 		{
 			{0,0,0,0},
@@ -316,9 +316,11 @@ void main() {
 		}),
 	}
 
+	local glslVersion = GLProgram.getVersionPragma()
 	displayShader = GLProgram{
-		vertexCode = [[
-#version 460
+		vertexCode =
+glslVersion..'\n'
+..[[
 uniform sampler2D posTex, velTex;
 uniform mat4 modelViewProjectionMatrix;
 in vec2 uv;
@@ -331,8 +333,9 @@ void main() {
 	gl_Position = modelViewProjectionMatrix * pos;
 }
 ]],
-		fragmentCode = [[
-#version 460
+		fragmentCode =
+glslVersion..'\n'
+..[[
 uniform float displayScale;
 uniform sampler1D gradTex;
 in float magn;
@@ -373,7 +376,7 @@ function App:update(...)
 
 
 --	gl.glEnable(gl.GL_TEXTURE_2D)
-	
+
 	gl.glGetFloatv(gl.GL_VIEWPORT, viewport.s)
 	gl.glViewport(0,0,fieldDim,fieldDim)
 	gl.glMatrixMode(gl.GL_PROJECTION)
@@ -433,7 +436,7 @@ function App:update(...)
 	displayShader:use()
 	gl.glUniformMatrix4fv(displayShader.uniforms.modelViewProjectionMatrix.loc, 1, false, modelViewProjectionMatrix.ptr)
 	gl.glUniform1f(displayShader.uniforms.displayScale.loc, displayScale)
-	
+
 	posTexs:cur():bind(0)
 --	velTexs:cur():bind(1)
 --	gradTex:bind(2)
@@ -470,7 +473,7 @@ function App:update(...)
 --
 	displayShader:useNone()
 	gl.glPointSize(1)
-glreport'here'	
+glreport'here'
 
 
 
@@ -482,13 +485,13 @@ glreport'here'
 		local e = vec3f() e.s[i] = 1
 		local e2 = vec3f() e2.s[(i+1)%3] = 1
 		local e3 = vec3f() e3.s[(i+2)%3] = 1
-		
+
 		gl.glColor3d(e:unpack())
 		gl.glBegin(gl.GL_LINES)
 		gl.glVertex3d(0,0,0)
 		gl.glVertex3d((e*2):unpack())
 		gl.glEnd()
-	
+
 		-- [[
 		gl.glColor3d(.1,.1,.1)
 		for j=-graphSize,graphSize do
@@ -533,7 +536,7 @@ function App:event(event, ...)
 		if event.key.keysym.sym == ('r'):byte() then
 			reset()
 		end
-	end	
+	end
 end
 
 function App:updateGUI()
