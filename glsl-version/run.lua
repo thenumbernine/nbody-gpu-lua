@@ -141,7 +141,7 @@ local function reset()
 		}:unbind()
 		uvAttr = GLAttribute{
 			buffer = uvBuv,
-			size = 2,
+			dim = 2,
 			type = gl.GL_FLOAT,
 			stride = ffi.sizeof'vec2f_t',
 			offset = 0,
