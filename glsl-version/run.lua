@@ -25,7 +25,7 @@ local matrix_ffi = require 'matrix.ffi'
 matrix_ffi.real = 'float'	-- default matrix_ffi type
 
 local App = require 'imguiapp.withorbit'()
-
+App.viewUseGLMatrixMode = true
 local fieldDim = 64
 local count = fieldDim * fieldDim
 local update = true
@@ -36,7 +36,7 @@ local channelsPerFormat = {
 }
 
 local function dataFromLambda(width, height, format, gltype, callback)
-	local ctype = assert(GLTex2D.ctypeForGLType[gltype], "couldn't determine size of type "..tostring(gltype))
+	local ctype = assert(require 'gl.types'.ctypeForGLType[gltype], "couldn't determine size of type "..tostring(gltype))
 	local numChannels = assert(channelsPerFormat[format], "couldn't determine channels for format "..tostring(format))
 	local ptr = ffi.new(ctype..'[?]', width * height * numChannels)
 	for j=0,height-1 do

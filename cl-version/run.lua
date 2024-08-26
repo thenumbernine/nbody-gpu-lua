@@ -15,7 +15,7 @@ local vec3f = require 'vec-ffi.vec3f'
 local vec4f = require 'vec-ffi.vec4f'
 
 local App = require 'imguiapp.withorbit'()
-
+App.viewUseGLMatrixMode = true
 --local count = 16
 local count = 2048
 
