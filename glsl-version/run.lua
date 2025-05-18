@@ -1,10 +1,12 @@
 #!/usr/bin/env luajit
+local cmdline = require 'ext.cmdline'(...)
 local ffi = require 'ffi'
-local sdl = require 'ffi.req' 'sdl'
+local sdl = require 'sdl'
 local math = require 'ext.math'
 local table = require 'ext.table'
 local vector = require 'ffi.cpp.vector-lua'
 local template = require 'template'
+local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
 local GLTex1D = require 'gl.tex2d'
 local GLTex2D = require 'gl.tex2d'
 local GLPingPong = require 'gl.pingpong'
@@ -13,7 +15,6 @@ local GLArrayBuffer = require 'gl.arraybuffer'
 local GLAttribute = require 'gl.attribute'
 local GLKernelProgram = require 'gl.kernelprogram'
 local glreport = require 'gl.report'
-local gl = require 'gl'
 local clnumber = require 'cl.obj.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
 local ig = require 'imgui'
 local vec2i = require 'vec-ffi.vec2i'
@@ -24,7 +25,7 @@ local vec4f = require 'vec-ffi.vec4f'
 local matrix_ffi = require 'matrix.ffi'
 matrix_ffi.real = 'float'	-- default matrix_ffi type
 
-local App = require 'imguiapp.withorbit'()
+local App = require 'imgui.appwithorbit'()
 App.viewUseGLMatrixMode = true
 local fieldDim = 64
 local count = fieldDim * fieldDim
@@ -214,6 +215,7 @@ end
 
 App.viewDist = 1
 
+--[[ crashing
 messageCallback = function(
 	source,		-- GLenum
 	gltype,		-- GLenum
@@ -226,6 +228,7 @@ messageCallback = function(
 	print('gl error', source, gltype, id, severity, ffi.string(msg, length))
 end
 messageCallbackClosure = ffi.cast('GLDEBUGPROC', messageCallback)
+--]]
 
 function App:initGL(...)
 	App.super.initGL(self, ...)
