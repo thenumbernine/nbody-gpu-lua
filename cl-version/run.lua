@@ -1,20 +1,20 @@
 #!/usr/bin/env luajit
-
+local cmdline = require 'ext.cmdline'(...)
 local ffi = require 'ffi'
 local vector = require 'ffi.cpp.vector-lua'
 local table = require 'ext.table'
 local path = require 'ext.path'
+local gl = require 'gl.setup'(cmdline.gl)
 local GLProgram = require 'gl.program'
 local GLTex2D = require 'gl.tex2d'
 local GLArrayBuffer = require 'gl.arraybuffer'
 local glreport = require 'gl.report'
-local gl = require 'gl'
 local CLEnv = require 'cl.obj.env'
 local vec2i = require 'vec-ffi.vec2i'
 local vec3f = require 'vec-ffi.vec3f'
 local vec4f = require 'vec-ffi.vec4f'
 
-local App = require 'imguiapp.withorbit'()
+local App = require 'imgui.appwithorbit'()
 App.viewUseGLMatrixMode = true
 --local count = 16
 local count = 2048
@@ -36,6 +36,8 @@ function App:initGL(...)
 		precision = 'float',
 		size = {count},
 		verbose = true,
+		getPlatform = CLEnv.getterForIdent(cmdline.platform, 'platform'),
+		getDevices = CLEnv.getterForIdent(cmdline.device, 'device'),
 	}
 
 	self.positionVBO = GLArrayBuffer{
