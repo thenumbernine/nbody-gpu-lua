@@ -23,11 +23,13 @@ local vec4f = require 'vec-ffi.vec4f'
 
 local App = require 'imgui.appwithorbit'()
 
---local fieldDim = 256
 --local fieldDim = 128
-local fieldDim = 64
+--local fieldDim = cmdline.n or 64
+--local fieldDim = cmdline.n or 256
+local fieldDim = cmdline.n or 512
 local count = fieldDim * fieldDim
-local update = true
+update = true	-- _G for gui
+local pairUpdatesPerFrame = 1024	-- dont update all pairs of particles, just this many per frame
 
 local channelsPerFormat = {
 	[gl.GL_RGB] = 3,
@@ -117,10 +119,12 @@ gravConst = 1e-10
 --gravConst = 1.185609940161901e-4	-- Earth orbit units
 --gravConst = .5	-- Moon orbit units
 
-displayScale = 500
+--displayScale = 500
+displayScale = 200
 pointSize = 2
 --gravDistEpsilon = 1e-7
-gravDistEpsilon = 1e-3
+--gravDistEpsilon = 1e-3
+gravDistEpsilon = 1e-1
 
 r0min = 1
 r0max = 2
@@ -177,6 +181,7 @@ local function reset()
 		-- vel = i r omega cis (omega t) = i omega pos
 		-- by the 1-2-3 law: G (m1 + m2) = omega^2 * a^3 => omega = sqrt(G (m1 + m2) / a^3)
 		local omega = math.sqrt(gravConst * totalMass / (r * r * r))
+omega = omega * .7	-- hmm it is starting too fast ...
 		velv[0].x = -omega * posv[0].y
 		velv[0].y = omega * posv[0].x
 		velv[0].z = 0
@@ -315,13 +320,32 @@ in vec2 pos;
 out vec4 fragColor;
 uniform sampler2D postex, veltex;
 uniform float dt, gravConst, gravDistEpsilon;
+
+//#define LOOP_ALL
+#define LOOP_FEW
+
+#ifdef LOOP_FEW
+uniform int updateStart, updateEnd, fieldDim;
+#endif
+
 void main() {
 	vec4 vpos = texture(postex, pos);
 	vec4 vvel = texture(veltex, pos);
 	vec3 accumforce = vec3(0.);
+
+#ifdef LOOP_ALL
 	vec2 otc;
 	for (otc.x = .5/<?=fieldDim?>; otc.x < 1.; otc.x += 1./<?=fieldDim?>) {
 		for (otc.y = .5/<?=fieldDim?>; otc.y < 1.; otc.y += 1./<?=fieldDim?>) {
+#endif
+#ifdef LOOP_FEW
+	{
+		for (int i = updateStart; i < updateEnd; ++i) {
+			vec2 otc = vec2(
+				(float(i % fieldDim) + .5) / float(fieldDim),
+				(float(i / fieldDim) + .5) / float(fieldDim)
+			);
+#endif
 			vec4 otherpos = texture(postex, otc);
 			float othermass = otherpos.w;
 			vec3 del = otherpos.xyz - vpos.xyz;
@@ -345,6 +369,7 @@ void main() {
 			uniforms = {
 				postex = 0,
 				veltex = 1,
+				fieldDim = fieldDim,
 			},
 		},
 		geometry = self.quadGeom,
@@ -419,6 +444,7 @@ void main() {
 	gl.glDisable(gl.GL_CULL_FACE)
 end
 
+local updateStart = 0
 function App:update(...)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 glreport'here'
@@ -435,10 +461,24 @@ glreport'here'
 				simVelObj.texs[1] = posTexs:prev()
 				simVelObj.texs[2] = velTexs:prev()
 				simVelObj.uniforms.dt = dt
-				simVelObj.uniforms.gravConst = gravConst
+				simVelObj.uniforms.gravConst = gravConst * (count / pairUpdatesPerFrame)	-- scale up by how many times less than typical we are applying forces
 				simVelObj.uniforms.gravDistEpsilon = gravDistEpsilon
 				simVelObj.uniforms.mvProjMat = self.pingPongProjMat.ptr
+				simVelObj.uniforms.updateStart = updateStart
+
+				local updateEnd = updateStart + pairUpdatesPerFrame
+				local looped
+				if updateEnd >= count then
+					updateEnd = count
+					looped = true
+				end
+				simVelObj.uniforms.updateEnd = updateEnd
 				simVelObj:draw()
+				if looped then
+					updateStart = 0
+				else
+					updateStart = updateEnd
+				end
 			end,
 		}
 		posTexs:swap()
@@ -536,6 +576,7 @@ end
 
 function App:updateGUI()
 	if ig.igButton'reset' then reset() end
+	ig.luatableCheckbox('update', _G, 'update')
 	ig.luatableInputFloatAsText('dt', _G, 'dt')
 	ig.luatableInputFloatAsText('G', _G, 'gravConst')
 	ig.luatableInputFloatAsText('displayScale', _G, 'displayScale')	-- TODO could auto determine if I wanted to add some reduce kernels ... migth do reduce kernels just for the gravitation COM ...
