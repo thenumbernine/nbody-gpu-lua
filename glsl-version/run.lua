@@ -23,7 +23,9 @@ local vec4f = require 'vec-ffi.vec4f'
 
 local App = require 'imgui.appwithorbit'()
 
-local fieldDim = 64
+--local fieldDim = 256
+local fieldDim = 128
+--local fieldDim = 64
 local count = fieldDim * fieldDim
 local update = true
 
@@ -115,9 +117,10 @@ gravConst = 1e-10
 --gravConst = 1.185609940161901e-4	-- Earth orbit units
 --gravConst = .5	-- Moon orbit units
 
-displayScale = 1000
+displayScale = 500
 pointSize = 2
-gravDistEpsilon = 1e-7
+--gravDistEpsilon = 1e-7
+gravDistEpsilon = 1e-3
 
 r0min = 1
 r0max = 2
@@ -186,7 +189,7 @@ local function reset()
 	velTexs = createFieldPingPong{data = velData.v}
 end
 
-App.viewDist = 1
+App.viewDist = 2
 
 --[[ crashing
 messageCallback = function(
@@ -357,13 +360,22 @@ void main() {
 uniform sampler2D posTex, velTex;
 uniform mat4 mvProjMat;
 uniform int fieldDim;
-//in vec2 vertex;
+
+#define USE_VERTEX
+
+#ifdef USE_VERTEX
+in vec2 vertex;
+#endif
+
 out float magn;
 void main() {
+#ifndef USE_VERTEX
 	vec2 vertex = vec2(
 		(float(gl_VertexID % fieldDim) + .5) / float(fieldDim),
 		(float(gl_VertexID / fieldDim) + .5) / float(fieldDim)
 	);
+#endif
+
 	vec4 pos4 = texture(posTex, vertex);
 	vec4 vel = texture(velTex, vertex);
 	vec4 pos = vec4(pos4.xyz, 1.);
