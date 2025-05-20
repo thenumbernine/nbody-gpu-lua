@@ -40,6 +40,8 @@ function App:initGL(...)
 		getDevices = CLEnv.getterForIdent(cmdline.device, 'device'),
 	}
 
+self.env.useGLSharing = false
+
 	self.positionVBO = GLArrayBuffer{
 		size = ffi.sizeof'vec4f_t' * count,
 		usage = gl.GL_DYNAMIC_DRAW,

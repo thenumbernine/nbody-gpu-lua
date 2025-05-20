@@ -45,7 +45,7 @@ kernel void initData(
 #endif
 #define AVERAGE_MASS	2171.2552622753	//average mass = .5 * (10^4 - 10^0) / log(10)
 #define TOTAL_MASS		(COUNT * AVERAGE_MASS)
-	obj->mass = mix(100., 10000., FRAND());//pow(10., FRAND() * 4.);
+	obj->mass = (real)mix((real)100., (real)10000., (real)FRAND());//pow(10., FRAND() * 4.);
 	real density = .5 * sqrt(-log(1. - FRAND()));
 	real cbrtMm = cbrt(TOTAL_MASS / FRAND());
 	real a = 100. * INITIAL_RADIUS / sqrt(sqrt(2.) - 1.);	//mystery: why scale by 100?
