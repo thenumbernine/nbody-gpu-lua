@@ -2,6 +2,7 @@
 local cmdline = require 'ext.cmdline'(...)
 local ffi = require 'ffi'
 local sdl = require 'sdl'
+local op = require 'ext.op'
 local math = require 'ext.math'
 local assert = require 'ext.assert'
 local table = require 'ext.table'
@@ -30,6 +31,8 @@ local App = require 'imgui.appwithorbit'()
 local fieldDim = cmdline.n or 512
 local count = fieldDim * fieldDim
 update = true	-- _G for gui
+useBlend = false
+displayAlpha = .2
 local pairUpdatesPerFrame = 1024	-- dont update all pairs of particles, just this many per frame
 
 local channelsPerFormat = {
@@ -130,6 +133,8 @@ gravDistEpsilon = 1e-1
 r0min = 1
 r0max = 2
 
+math.randomseed(os.time())
+
 local function reset()
 	local posData = vector('vec4f_t', count)
 	local velData = vector('vec4f_t', count)
@@ -191,7 +196,16 @@ omega = omega * .6	-- hmm it is starting too fast ...
 		posv = posv + 1
 		velv = velv + 1
 	end
-	fbo = FBO():unbind()
+
+	fbo = FBO()
+	-- hmm this is FBO state, so I should move this to FBO?
+	local colorBuffers = ffi.new('GLenum[2]', {
+		gl.GL_COLOR_ATTACHMENT0,
+		gl.GL_COLOR_ATTACHMENT1,
+	})
+	gl.glDrawBuffers(2, colorBuffers)
+	fbo:unbind()
+
 	posTexs = createFieldPingPong{data = posData.v, fbo=fbo}
 	velTexs = createFieldPingPong{data = velData.v, fbo=fbo}
 end
@@ -270,38 +284,7 @@ function App:initGL(...)
 		},
 	}
 
-	simPosObj = GLSceneObject{
-		program = {
-			version = 'latest',
-			precision = 'best',
-			vertexCode = [[
-in vec2 vertex;
-void main() {
-	gl_Position = vec4(vertex * 2. - 1., 0., 1.);
-}
-]],
-			fragmentCode = [[
-out vec4 fragColor;
-uniform sampler2D postex, veltex;
-uniform float dt;
-void main() {
-	ivec2 iFragCoord = ivec2(gl_FragCoord);
-	vec4 vpos = texelFetch(postex, iFragCoord, 0);
-	vec4 vvel = texelFetch(veltex, iFragCoord, 0);
-	vpos.xyz += vvel.xyz * dt;
-	// preserve vpos.w == mass
-	fragColor = vpos;
-}
-]],
-			uniforms = {
-				postex = 0,
-				veltex = 1,
-			},
-		},
-		geometry = self.quadGeom,
-	}
-
-	simVelObj = GLSceneObject{
+	simObj = GLSceneObject{
 		program = {
 			version = 'latest',
 			precision = 'best',
@@ -315,7 +298,10 @@ void main() {
 }
 ]],
 			fragmentCode = template([[
-out vec4 fragColor;
+
+layout(location=0) out vec4 posFragColor;
+layout(location=1) out vec4 velFragColor;
+
 uniform sampler2D postex, veltex;
 uniform float dt, gravConst, gravDistEpsilon;
 
@@ -330,8 +316,12 @@ void main() {
 	ivec2 iFragCoord = ivec2(gl_FragCoord);
 	vec4 vpos = texelFetch(postex, iFragCoord, 0);
 	vec4 vvel = texelFetch(veltex, iFragCoord, 0);
-	vec3 accumforce = vec3(0.);
 
+	// forward-Euler step the position
+	posFragColor = vec4(vpos.xyz + vvel.xyz * dt, vpos.w);
+
+	// accumulate a subset of all force pairs as a force into the velocity
+	vec3 accumforce = vec3(0.);
 #ifdef LOOP_ALL
 	vec2 otc;
 	for (otc.x = .5/<?=fieldDim?>; otc.x < 1.; otc.x += 1./<?=fieldDim?>) {
@@ -362,7 +352,7 @@ void main() {
 		}
 	}
 	vvel.xyz += accumforce * dt;
-	fragColor = vvel;
+	velFragColor = vvel;
 }
 ]],			{
 				fieldDim = clnumber(fieldDim),
@@ -414,12 +404,16 @@ void main() {
 }
 ]],
 			fragmentCode = [[
-uniform float displayScale;
-uniform sampler2D gradTex;
 in float magn;
 out vec4 fragColor;
+uniform sampler2D gradTex;
+uniform float displayScale;
+uniform float alpha;
 void main() {
-	fragColor = texture(gradTex, vec2(magn * displayScale, .5));
+	fragColor = vec4(
+		texture(gradTex, vec2(magn * displayScale, .5)).xyz,
+		alpha	// TODO alpha for mass? size for mass?  both for mass?
+	);
 }
 ]],
 			uniforms = {
@@ -445,6 +439,9 @@ void main() {
 	gl.glDisable(gl.GL_CULL_FACE)
 end
 
+-- I'll just throw glPointSize and gl_PointSize at it and one is bound to work
+local hasGLPointSize = op.safeindex(gl, 'glPointSize')
+
 local updateStart = 0
 function App:update(...)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
@@ -452,21 +449,22 @@ glreport'here'
 
 	if update then
 		gl.glViewport(0, 0, fieldDim, fieldDim)
-		-- TODO instead of swapping color attachments
-		-- how about binding the current pos and vel at the same time?
-		-- and combining their update shaders?
+
+		posTexs:swap()
 		velTexs:swap()
+
 		fbo:bind()
-		fbo:setColorAttachmentTex2D(velTexs:cur().id)
+		fbo:setColorAttachmentTex2D(posTexs:cur().id, 0)
+		fbo:setColorAttachmentTex2D(velTexs:cur().id, 1)
 		FBO:check()
-		simVelObj.texs[1] = posTexs:prev()
-		simVelObj.texs[2] = velTexs:prev()
-		simVelObj.uniforms.dt = dt
-		simVelObj.uniforms.gravConst = gravConst
+		simObj.texs[1] = posTexs:prev()
+		simObj.texs[2] = velTexs:prev()
+		simObj.uniforms.dt = dt
+		simObj.uniforms.gravConst = gravConst
 			-- scale up by how many times less than typical we are applying forces
 			* (count / pairUpdatesPerFrame)
-		simVelObj.uniforms.gravDistEpsilon = gravDistEpsilon
-		simVelObj.uniforms.updateStart = updateStart
+		simObj.uniforms.gravDistEpsilon = gravDistEpsilon
+		simObj.uniforms.updateStart = updateStart
 
 		local updateEnd = updateStart + pairUpdatesPerFrame
 		local looped
@@ -474,23 +472,15 @@ glreport'here'
 			updateEnd = count
 			looped = true
 		end
-		simVelObj.uniforms.updateEnd = updateEnd
-		simVelObj:draw()
+		simObj.uniforms.updateEnd = updateEnd
+
+		simObj:draw()
 		if looped then
 			updateStart = 0
 		else
 			updateStart = updateEnd
 		end
-		FBO:unbind()
 
-		posTexs:swap()
-		fbo:bind()
-		fbo:setColorAttachmentTex2D(posTexs:cur().id)
-		FBO:check()
-		simPosObj.texs[1] = posTexs:prev()
-		simPosObj.texs[2] = velTexs:prev()
-		simPosObj.uniforms.dt = dt
-		simPosObj:draw()
 		FBO:unbind()
 	end
 
@@ -498,19 +488,32 @@ glreport'here'
 
 	self.view:setup(self.width / self.height)
 
-	--gl.glPointSize(pointSize)
+	if useBlend then
+		gl.glBlendFunc(gl.GL_SRC_ALPHA, gl.GL_ONE)
+		gl.glEnable(gl.GL_BLEND)
+	end
+
+	-- how to know when this function is there ...
+	if hasGLPointSize then
+		gl.glPointSize(pointSize)
+	end
 
 	displayObj.uniforms.mvProjMat = self.view.mvProjMat.ptr
 	displayObj.uniforms.fieldDim = fieldDim
 	displayObj.uniforms.displayScale = displayScale
 	displayObj.uniforms.pointSize = pointSize
+	displayObj.uniforms.alpha = displayAlpha
 	displayObj.texs[1] = posTexs:cur()
 	displayObj.texs[2] = velTexs:cur()
 	displayObj.texs[3] = gradTex
 	displayObj:draw()
 
-	--gl.glPointSize(1)
+	-- how to know when this function is there ...
+	if hasGLPointSize then
+		gl.glPointSize(1)
+	end
 
+	gl.glDisable(gl.GL_BLEND)
 
 	--[=[ grid
 	local graphSize = 20
@@ -576,7 +579,11 @@ end
 
 function App:updateGUI()
 	if ig.igButton'reset' then reset() end
+	ig.igSameLine()
 	ig.luatableCheckbox('update', _G, 'update')
+	ig.igSameLine()
+	ig.luatableCheckbox('useBlend', _G, 'useBlend')
+	ig.luatableInputFloatAsText('displayAlpha', _G, 'displayAlpha')
 	ig.luatableInputFloatAsText('dt', _G, 'dt')
 	ig.luatableInputFloatAsText('G', _G, 'gravConst')
 	ig.luatableInputFloatAsText('displayScale', _G, 'displayScale')	-- TODO could auto determine if I wanted to add some reduce kernels ... migth do reduce kernels just for the gravitation COM ...
