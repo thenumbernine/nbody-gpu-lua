@@ -356,10 +356,12 @@ void main() {
 	displayObj = GLSceneObject{
 		program = {
 			version = 'latest',
+			precision = 'best',
 			vertexCode = [[
 uniform sampler2D posTex, velTex;
 uniform mat4 mvProjMat;
 uniform int fieldDim;
+uniform float pointSize;
 
 #define USE_VERTEX
 
@@ -375,6 +377,8 @@ void main() {
 		(float(gl_VertexID / fieldDim) + .5) / float(fieldDim)
 	);
 #endif
+
+	gl_PointSize = pointSize;
 
 	vec4 pos4 = texture(posTex, vertex);
 	vec4 vel = texture(velTex, vertex);
@@ -454,17 +458,18 @@ glreport'here'
 
 	self.view:setup(self.width / self.height)
 
-	gl.glPointSize(pointSize)
+	--gl.glPointSize(pointSize)
 
 	displayObj.uniforms.mvProjMat = self.view.mvProjMat.ptr
 	displayObj.uniforms.fieldDim = fieldDim
 	displayObj.uniforms.displayScale = displayScale
+	displayObj.uniforms.pointSize = pointSize
 	displayObj.texs[1] = posTexs:cur()
 	displayObj.texs[2] = velTexs:cur()
 	displayObj.texs[3] = gradTex
 	displayObj:draw()
 
-	gl.glPointSize(1)
+	--gl.glPointSize(1)
 
 
 	--[=[ grid
