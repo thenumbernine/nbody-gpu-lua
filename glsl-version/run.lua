@@ -273,22 +273,19 @@ function App:initGL(...)
 			version = 'latest',
 			precision = 'best',
 			vertexCode = [[
-uniform mat4 mvProjMat;
 in vec2 vertex;
-out vec2 pos;
 void main() {
-	pos = vertex;
-	gl_Position = mvProjMat * vec4(vertex * 2. - 1., 0., 1.);
+	gl_Position = vec4(vertex * 2. - 1., 0., 1.);
 }
 ]],
 			fragmentCode = [[
-in vec2 pos;
 out vec4 fragColor;
 uniform sampler2D postex, veltex;
 uniform float dt;
 void main() {
-	vec4 vpos = texture(postex, pos);
-	vec4 vvel = texture(veltex, pos);
+	ivec2 iFragCoord = ivec2(gl_FragCoord);
+	vec4 vpos = texelFetch(postex, iFragCoord, 0);
+	vec4 vvel = texelFetch(veltex, iFragCoord, 0);
 	vpos.xyz += vvel.xyz * dt;
 	// preserve vpos.w == mass
 	fragColor = vpos;
@@ -307,16 +304,15 @@ void main() {
 			version = 'latest',
 			precision = 'best',
 			vertexCode = [[
-uniform mat4 mvProjMat;
+
+// TODO replce with gl_VertexID / fixed array
 in vec2 vertex;
-out vec2 pos;
+
 void main() {
-	pos = vertex;
-	gl_Position = mvProjMat * vec4(vertex * 2. - 1., 0., 1.);
+	gl_Position = vec4(vertex * 2. - 1., 0., 1.);
 }
 ]],
 			fragmentCode = template([[
-in vec2 pos;
 out vec4 fragColor;
 uniform sampler2D postex, veltex;
 uniform float dt, gravConst, gravDistEpsilon;
@@ -329,24 +325,27 @@ uniform int updateStart, updateEnd, fieldDim;
 #endif
 
 void main() {
-	vec4 vpos = texture(postex, pos);
-	vec4 vvel = texture(veltex, pos);
+	ivec2 iFragCoord = ivec2(gl_FragCoord);
+	vec4 vpos = texelFetch(postex, iFragCoord, 0);
+	vec4 vvel = texelFetch(veltex, iFragCoord, 0);
 	vec3 accumforce = vec3(0.);
 
 #ifdef LOOP_ALL
 	vec2 otc;
 	for (otc.x = .5/<?=fieldDim?>; otc.x < 1.; otc.x += 1./<?=fieldDim?>) {
 		for (otc.y = .5/<?=fieldDim?>; otc.y < 1.; otc.y += 1./<?=fieldDim?>) {
+			vec4 otherpos = texture(postex, otc);
 #endif
 #ifdef LOOP_FEW
 	{
 		for (int i = updateStart; i < updateEnd; ++i) {
-			vec2 otc = vec2(
-				(float(i % fieldDim) + .5) / float(fieldDim),
-				(float(i / fieldDim) + .5) / float(fieldDim)
+			ivec2 itc = ivec2(
+				i % fieldDim,
+				i / fieldDim
 			);
+			// going from texture() to texelFetch(): 130 fps -> 160 fps
+			vec4 otherpos = texelFetch(postex, itc, 0);
 #endif
-			vec4 otherpos = texture(postex, otc);
 			float othermass = otherpos.w;
 			vec3 del = otherpos.xyz - vpos.xyz;
 			float len = length(del);
@@ -457,13 +456,13 @@ glreport'here'
 		velTexs:swap()
 		velTexs:draw{
 			callback=function()
-				gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 				simVelObj.texs[1] = posTexs:prev()
 				simVelObj.texs[2] = velTexs:prev()
 				simVelObj.uniforms.dt = dt
-				simVelObj.uniforms.gravConst = gravConst * (count / pairUpdatesPerFrame)	-- scale up by how many times less than typical we are applying forces
+				simVelObj.uniforms.gravConst = gravConst
+					-- scale up by how many times less than typical we are applying forces
+					* (count / pairUpdatesPerFrame)
 				simVelObj.uniforms.gravDistEpsilon = gravDistEpsilon
-				simVelObj.uniforms.mvProjMat = self.pingPongProjMat.ptr
 				simVelObj.uniforms.updateStart = updateStart
 
 				local updateEnd = updateStart + pairUpdatesPerFrame
@@ -484,11 +483,9 @@ glreport'here'
 		posTexs:swap()
 		posTexs:draw{
 			callback=function()
-				gl.glClear(gl.GL_COLOR_BUFFER_BIT)
 				simPosObj.texs[1] = posTexs:prev()
 				simPosObj.texs[2] = velTexs:prev()
 				simPosObj.uniforms.dt = dt
-				simPosObj.uniforms.mvProjMat = self.pingPongProjMat.ptr
 				simPosObj:draw()
 			end,
 		}
