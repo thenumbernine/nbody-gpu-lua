@@ -9,6 +9,7 @@ local vector = require 'ffi.cpp.vector-lua'
 local template = require 'template'
 local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
 local GLGradientTex2D = require 'gl.gradienttex2d'
+local FBO = require 'gl.fbo'
 local GLPingPong = require 'gl.pingpong'
 local GLGeometry = require 'gl.geometry'
 local GLSceneObject = require 'gl.sceneobject'
@@ -58,15 +59,15 @@ local function createFieldPingPong(args)
 	local height = fieldDim
 	local format = args.format or gl.GL_RGBA
 	local gltype = args.type or gl.GL_FLOAT
-	local internalFormat = args.internalFormat or gl.GL_RGBA32F
 	local data = args.data
 	if type(data) == 'function' then
 		data = dataFromLambda(width, height, format, gltype)
 	end
 	local pingpong = GLPingPong{
+		fbo = args.fbo,
 		width = width,
 		height = height,
-		internalFormat = internalFormat,
+		internalFormat = args.internalFormat or gl.GL_RGBA32F,
 		type = gltype,
 		format = format,
 		data = data,
@@ -181,7 +182,7 @@ local function reset()
 		-- vel = i r omega cis (omega t) = i omega pos
 		-- by the 1-2-3 law: G (m1 + m2) = omega^2 * a^3 => omega = sqrt(G (m1 + m2) / a^3)
 		local omega = math.sqrt(gravConst * totalMass / (r * r * r))
-omega = omega * .7	-- hmm it is starting too fast ...
+omega = omega * .6	-- hmm it is starting too fast ...
 		velv[0].x = -omega * posv[0].y
 		velv[0].y = omega * posv[0].x
 		velv[0].z = 0
@@ -190,8 +191,9 @@ omega = omega * .7	-- hmm it is starting too fast ...
 		posv = posv + 1
 		velv = velv + 1
 	end
-	posTexs = createFieldPingPong{data = posData.v}
-	velTexs = createFieldPingPong{data = velData.v}
+	fbo = FBO():unbind()
+	posTexs = createFieldPingPong{data = posData.v, fbo=fbo}
+	velTexs = createFieldPingPong{data = velData.v, fbo=fbo}
 end
 
 App.viewDist = 2
@@ -454,41 +456,42 @@ glreport'here'
 		-- how about binding the current pos and vel at the same time?
 		-- and combining their update shaders?
 		velTexs:swap()
-		velTexs:draw{
-			callback=function()
-				simVelObj.texs[1] = posTexs:prev()
-				simVelObj.texs[2] = velTexs:prev()
-				simVelObj.uniforms.dt = dt
-				simVelObj.uniforms.gravConst = gravConst
-					-- scale up by how many times less than typical we are applying forces
-					* (count / pairUpdatesPerFrame)
-				simVelObj.uniforms.gravDistEpsilon = gravDistEpsilon
-				simVelObj.uniforms.updateStart = updateStart
+		fbo:bind()
+		fbo:setColorAttachmentTex2D(velTexs:cur().id)
+		FBO:check()
+		simVelObj.texs[1] = posTexs:prev()
+		simVelObj.texs[2] = velTexs:prev()
+		simVelObj.uniforms.dt = dt
+		simVelObj.uniforms.gravConst = gravConst
+			-- scale up by how many times less than typical we are applying forces
+			* (count / pairUpdatesPerFrame)
+		simVelObj.uniforms.gravDistEpsilon = gravDistEpsilon
+		simVelObj.uniforms.updateStart = updateStart
 
-				local updateEnd = updateStart + pairUpdatesPerFrame
-				local looped
-				if updateEnd >= count then
-					updateEnd = count
-					looped = true
-				end
-				simVelObj.uniforms.updateEnd = updateEnd
-				simVelObj:draw()
-				if looped then
-					updateStart = 0
-				else
-					updateStart = updateEnd
-				end
-			end,
-		}
+		local updateEnd = updateStart + pairUpdatesPerFrame
+		local looped
+		if updateEnd >= count then
+			updateEnd = count
+			looped = true
+		end
+		simVelObj.uniforms.updateEnd = updateEnd
+		simVelObj:draw()
+		if looped then
+			updateStart = 0
+		else
+			updateStart = updateEnd
+		end
+		FBO:unbind()
+
 		posTexs:swap()
-		posTexs:draw{
-			callback=function()
-				simPosObj.texs[1] = posTexs:prev()
-				simPosObj.texs[2] = velTexs:prev()
-				simPosObj.uniforms.dt = dt
-				simPosObj:draw()
-			end,
-		}
+		fbo:bind()
+		fbo:setColorAttachmentTex2D(posTexs:cur().id)
+		FBO:check()
+		simPosObj.texs[1] = posTexs:prev()
+		simPosObj.texs[2] = velTexs:prev()
+		simPosObj.uniforms.dt = dt
+		simPosObj:draw()
+		FBO:unbind()
 	end
 
 	gl.glViewport(0, 0, self.width, self.height)
