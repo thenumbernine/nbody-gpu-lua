@@ -1,0 +1,18 @@
+name = "nbody-gpu"
+files = {
+	["README.md"] = "nbody-gpu/README.md",
+	["cl-version/nbody.cl"] = "nbody-gpu/cl-version/nbody.cl",
+	["cl-version/run.lua"] = "nbody-gpu/cl-version/run.lua",
+	["glsl-version/run.lua"] = "nbody-gpu/glsl-version/run.lua",
+	["pics/pic1.png"] = "nbody-gpu/pics/pic1.png",
+}
+deps = {
+	"cl",
+	"ext",
+	"gl",
+	"imgui",
+	"matrix",
+	"sdl",
+	"template",
+	"vec-ffi",
+}
