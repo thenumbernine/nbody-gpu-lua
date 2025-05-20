@@ -14,6 +14,8 @@ local GLProgram = require 'gl.program'
 local GLArrayBuffer = require 'gl.arraybuffer'
 local GLAttribute = require 'gl.attribute'
 local GLKernelProgram = require 'gl.kernelprogram'
+local GLGeometry = require 'gl.geometry'
+local GLSceneObject = require 'gl.sceneobject'
 local glreport = require 'gl.report'
 local clnumber = require 'cl.obj.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
 local ig = require 'imgui'
@@ -22,11 +24,8 @@ local vec2f = require 'vec-ffi.vec2f'
 local vec3f = require 'vec-ffi.vec3f'
 local vec4f = require 'vec-ffi.vec4f'
 
-local matrix_ffi = require 'matrix.ffi'
-matrix_ffi.real = 'float'	-- default matrix_ffi type
-
 local App = require 'imgui.appwithorbit'()
-App.viewUseGLMatrixMode = true
+
 local fieldDim = 64
 local count = fieldDim * fieldDim
 local update = true
@@ -76,7 +75,6 @@ local function createFieldPingPong(args)
 end
 
 
-local uvAttr
 local posTexs
 local velTexs
 
@@ -138,15 +136,9 @@ local function reset()
 		uvBuf = GLArrayBuffer{
 			size = count * ffi.sizeof'vec2f_t',
 			data = uvCPUMem,
+			dim = 2,
 			usage = gl.GL_STATIC_DRAW,
 		}:unbind()
-		uvAttr = GLAttribute{
-			buffer = uvBuv,
-			dim = 2,
-			type = gl.GL_FLOAT,
-			stride = ffi.sizeof'vec2f_t',
-			offset = 0,
-		}
 		--]]
 	end
 
@@ -270,34 +262,38 @@ function App:initGL(...)
 		end),
 --]]
 		false
-	)
+	):unbind()
+--DEBUG(gl):glreport'here'
 
 	simPosShader = GLKernelProgram{
+		gl3 = true,
 		texs = {'postex', 'veltex'};
 		code = [[
 uniform float dt;
 void main() {
-	vec4 vpos = texture2D(postex, pos);
-	vec4 vvel = texture2D(veltex, pos);
+	vec4 vpos = texture(postex, pos);
+	vec4 vvel = texture(veltex, pos);
 	vpos.xyz += vvel.xyz * dt;
 	// preserve vpos.w == mass
-	gl_FragColor = vpos;
+	fragColor = vpos;
 }
 ]],
-	}
+	}:useNone()
+--DEBUG(gl):glreport'here'
 
 	simVelShader = GLKernelProgram{
+		gl3 = true,
 		texs = {'postex','veltex'};
 		code = template([[
 uniform float dt, gravConst, gravDistEpsilon;
 void main() {
-	vec4 vpos = texture2D(postex, pos);
-	vec4 vvel = texture2D(veltex, pos);
+	vec4 vpos = texture(postex, pos);
+	vec4 vvel = texture(veltex, pos);
 	vec3 accumforce = vec3(0.);
 	vec2 otc;
 	for (otc.x = .5/<?=fieldDim?>; otc.x < 1.; otc.x += 1./<?=fieldDim?>) {
 		for (otc.y = .5/<?=fieldDim?>; otc.y < 1.; otc.y += 1./<?=fieldDim?>) {
-			vec4 otherpos = texture2D(postex, otc);
+			vec4 otherpos = texture(postex, otc);
 			float othermass = otherpos.w;
 			vec3 del = otherpos.xyz - vpos.xyz;
 			float len = length(del);
@@ -312,20 +308,19 @@ void main() {
 		}
 	}
 	vvel.xyz += accumforce * dt;
-	gl_FragColor = vvel;
+	fragColor = vvel;
 }
 ]],		{
 			fieldDim = clnumber(fieldDim),
 		}),
-	}
+	}:useNone()
+--DEBUG(gl):glreport'here'
 
-	local glslVersion = GLProgram.getVersionPragma()
 	displayShader = GLProgram{
-		vertexCode =
-glslVersion..'\n'
-..[[
+		version = 'latest',
+		vertexCode = [[
 uniform sampler2D posTex, velTex;
-uniform mat4 modelViewProjectionMatrix;
+uniform mat4 mvProjMat;
 in vec2 uv;
 out float magn;
 void main() {
@@ -333,12 +328,10 @@ void main() {
 	vec4 vel = texture(velTex, uv);
 	vec4 pos = vec4(pos4.xyz, 1.);
 	magn = length(vel.xyz);//length(pos.xyz);
-	gl_Position = modelViewProjectionMatrix * pos;
+	gl_Position = mvProjMat * pos;
 }
 ]],
-		fragmentCode =
-glslVersion..'\n'
-..[[
+		fragmentCode = [[
 uniform float displayScale;
 uniform sampler1D gradTex;
 in float magn;
@@ -354,7 +347,9 @@ void main() {
 		},
 		-- [[
 		attrs = {
-			uv = uvAttr,
+			uv = {
+				buffer = uvBuf,
+			},
 		},
 		--]]
 		--[[
@@ -363,54 +358,80 @@ void main() {
 		},
 		--]]
 	}:useNone()
+--DEBUG(gl):glreport'here'
+
+	-- used for drawing fbo to screen
+	quadScreenObj = GLSceneObject{
+		program = simPosShader,
+		geometry = 	{
+			mode = gl.GL_TRIANGLE_STRIP,
+		},
+		vertexes = {
+			dim = 2,
+			data = {
+				0, 0,
+				1, 0,
+				0, 1,
+				1, 1,
+			}
+		},
+	}
 
 	gl.glDisable(gl.GL_DEPTH_TEST)
+--DEBUG(gl):glreport'here'
 	gl.glDisable(gl.GL_CULL_FACE)
+--DEBUG(gl):glreport'here'
 end
 
 local viewport = vec4f()
 
-local modelViewMatrix = matrix_ffi.zeros{4,4}
-local projectionMatrix = matrix_ffi.zeros{4,4}
-local modelViewProjectionMatrix = matrix_ffi.zeros{4,4}
+-- the default one is based on GL1
+-- this is for GL3, to go along with the "gl3=true" GLKernelProgram
+local function drawScreenQuad()
+--DEBUG(gl):glreport'here'
+	quadScreenObj:draw()
+--DEBUG(gl):glreport'here'
+end
 
 function App:update(...)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+--DEBUG(gl):glreport'here'
 
 
 --	gl.glEnable(gl.GL_TEXTURE_2D)
 
 	gl.glGetFloatv(gl.GL_VIEWPORT, viewport.s)
+--DEBUG(gl):glreport'here'
 	gl.glViewport(0,0,fieldDim,fieldDim)
-	gl.glMatrixMode(gl.GL_PROJECTION)
-	gl.glPushMatrix()
-	gl.glLoadIdentity()
-	gl.glOrtho(0,1,0,1,-1,1)
-	gl.glMatrixMode(gl.GL_MODELVIEW)
-	gl.glPushMatrix()
-	gl.glLoadIdentity()
+--DEBUG(gl):glreport'here'
+
 	if update then
 		-- TODO instead of swapping color attachments
 		-- how about binding the current pos and vel at the same time?
 		-- and combining their update shaders?
+--DEBUG(gl):glreport'here'
 		velTexs:swap()
+--DEBUG(gl):glreport'here'
 		velTexs:draw{
 			shader=simVelShader,
 			texs={posTexs:cur(), velTexs:prev()},
 			uniforms={dt=dt, gravConst=gravConst, gravDistEpsilon=gravDistEpsilon},
+			callback=drawScreenQuad,
 		}
+--DEBUG(gl):glreport'here'
 		posTexs:swap()
+--DEBUG(gl):glreport'here'
 		posTexs:draw{
 			shader=simPosShader,
 			texs={posTexs:prev(), velTexs:prev()},
 			uniforms={dt=dt},
+			callback=drawScreenQuad,
 		}
+--DEBUG(gl):glreport'here'
 	end
+--DEBUG(gl):glreport'here'
 	gl.glViewport(viewport:unpack())
-	gl.glMatrixMode(gl.GL_PROJECTION)
-	gl.glPopMatrix()
-	gl.glMatrixMode(gl.GL_MODELVIEW)
-	gl.glPopMatrix()
+--DEBUG(gl):glreport'here'
 
 --	gl.glDisable(gl.GL_TEXTURE_2D)
 
@@ -430,14 +451,11 @@ function App:update(...)
 
 
 	self.view:setup(self.width / self.height)
-	gl.glGetFloatv(gl.GL_MODELVIEW_MATRIX, modelViewMatrix.ptr)
-	gl.glGetFloatv(gl.GL_PROJECTION_MATRIX, projectionMatrix.ptr)
-	modelViewProjectionMatrix:mul(projectionMatrix, modelViewMatrix)
 
 	gl.glPointSize(pointSize)
 
 	displayShader:use()
-	gl.glUniformMatrix4fv(displayShader.uniforms.modelViewProjectionMatrix.loc, 1, false, modelViewProjectionMatrix.ptr)
+	gl.glUniformMatrix4fv(displayShader.uniforms.mvProjMat.loc, 1, false, self.view.mvProjMat.ptr)
 	gl.glUniform1f(displayShader.uniforms.displayScale.loc, displayScale)
 
 	posTexs:cur():bind(0)
@@ -454,10 +472,13 @@ function App:update(...)
 --]]
 -- [[
 	uvBuf:bind()
-	gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
+
+--	gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
 --	displayShader.vao:bind()
 --	gl.glVertexPointer(2, gl.GL_FLOAT, ffi.sizeof'vec2f_t', nil)
+
 	gl.glDrawArrays(gl.GL_POINTS, 0, count)
+
 --	displayShader.vao:unbind()
 --	gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
 	uvBuf:unbind()
@@ -475,8 +496,9 @@ function App:update(...)
 --	GLTex2D:unbind(0)
 --
 	displayShader:useNone()
+--DEBUG(gl):glreport'here'
 	gl.glPointSize(1)
-glreport'here'
+--DEBUG(gl):glreport'here'
 
 
 
