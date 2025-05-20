@@ -24,8 +24,8 @@ local vec4f = require 'vec-ffi.vec4f'
 local App = require 'imgui.appwithorbit'()
 
 --local fieldDim = 256
-local fieldDim = 128
---local fieldDim = 64
+--local fieldDim = 128
+local fieldDim = 64
 local count = fieldDim * fieldDim
 local update = true
 
