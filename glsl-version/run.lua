@@ -3,22 +3,19 @@ local cmdline = require 'ext.cmdline'(...)
 local ffi = require 'ffi'
 local sdl = require 'sdl'
 local math = require 'ext.math'
+local assert = require 'ext.assert'
 local table = require 'ext.table'
 local vector = require 'ffi.cpp.vector-lua'
 local template = require 'template'
 local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
-local GLTex1D = require 'gl.tex2d'
-local GLTex2D = require 'gl.tex2d'
+local GLGradientTex2D = require 'gl.gradienttex2d'
 local GLPingPong = require 'gl.pingpong'
-local GLProgram = require 'gl.program'
-local GLArrayBuffer = require 'gl.arraybuffer'
-local GLAttribute = require 'gl.attribute'
-local GLKernelProgram = require 'gl.kernelprogram'
 local GLGeometry = require 'gl.geometry'
 local GLSceneObject = require 'gl.sceneobject'
 local glreport = require 'gl.report'
 local clnumber = require 'cl.obj.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
 local ig = require 'imgui'
+local matrix_ffi = require 'matrix.ffi'
 local vec2i = require 'vec-ffi.vec2i'
 local vec2f = require 'vec-ffi.vec2f'
 local vec3f = require 'vec-ffi.vec3f'
@@ -36,8 +33,8 @@ local channelsPerFormat = {
 }
 
 local function dataFromLambda(width, height, format, gltype, callback)
-	local ctype = assert(require 'gl.types'.ctypeForGLType[gltype], "couldn't determine size of type "..tostring(gltype))
-	local numChannels = assert(channelsPerFormat[format], "couldn't determine channels for format "..tostring(format))
+	local ctype = assert.index(require 'gl.types'.ctypeForGLType, gltype, "couldn't determine size of type")
+	local numChannels = assert.index(channelsPerFormat, format, "couldn't determine channels for format")
 	local ptr = ffi.new(ctype..'[?]', width * height * numChannels)
 	for j=0,height-1 do
 		for i=0,width-1 do
@@ -62,7 +59,7 @@ local function createFieldPingPong(args)
 	if type(data) == 'function' then
 		data = dataFromLambda(width, height, format, gltype)
 	end
-	return GLPingPong{
+	local pingpong = GLPingPong{
 		width = width,
 		height = height,
 		internalFormat = internalFormat,
@@ -70,8 +67,10 @@ local function createFieldPingPong(args)
 		format = format,
 		data = data,
 		minFilter = gl.GL_NEAREST,
-		magFilter = gl.GL_NEAREST,
+		magFilter = gl.GL_LINEAR,--gl.GL_NEAREST,
 	}
+
+	return pingpong
 end
 
 
@@ -124,24 +123,6 @@ r0min = 1
 r0max = 2
 
 local function reset()
-	do
-		local width = fieldDim
-		local height = fieldDim
-		local format = gl.GL_RGBA
-		local gltype = gl.GL_FLOAT
-		uvCPUMem = dataFromLambda(width, height, format, gltype, function(i,j)
-			return (i+.5)/width, (j+.5)/height
-		end)
-		-- [[
-		uvBuf = GLArrayBuffer{
-			size = count * ffi.sizeof'vec2f_t',
-			data = uvCPUMem,
-			dim = 2,
-			usage = gl.GL_STATIC_DRAW,
-		}:unbind()
-		--]]
-	end
-
 	local posData = vector('vec4f_t', count)
 	local velData = vector('vec4f_t', count)
 
@@ -235,7 +216,7 @@ function App:initGL(...)
 
 	reset()
 
-	gradTex = require 'gl.gradienttex'(256,
+	gradTex = GLGradientTex2D(256,
 --[[ rainbow or heatmap or whatever
 		{
 			{0,0,0,0},
@@ -263,12 +244,39 @@ function App:initGL(...)
 --]]
 		false
 	):unbind()
---DEBUG(gl):glreport'here'
 
-	simPosShader = GLKernelProgram{
-		gl3 = true,
-		texs = {'postex', 'veltex'};
-		code = [[
+	self.pingPongProjMat = matrix_ffi({4,4}, 'float'):zeros():setOrtho(-1, 1, -1, 1, -1, 1)
+
+	self.quadGeom = GLGeometry{
+		mode = gl.GL_TRIANGLE_STRIP,
+		vertexes = {
+			data = 	{
+				0, 0,
+				1, 0,
+				0, 1,
+				1, 1,
+			},
+			dim = 2,
+		},
+	}
+
+	simPosObj = GLSceneObject{
+		program = {
+			version = 'latest',
+			precision = 'best',
+			vertexCode = [[
+uniform mat4 mvProjMat;
+in vec2 vertex;
+out vec2 pos;
+void main() {
+	pos = vertex;
+	gl_Position = mvProjMat * vec4(vertex * 2. - 1., 0., 1.);
+}
+]],
+			fragmentCode = [[
+in vec2 pos;
+out vec4 fragColor;
+uniform sampler2D postex, veltex;
 uniform float dt;
 void main() {
 	vec4 vpos = texture(postex, pos);
@@ -278,13 +286,31 @@ void main() {
 	fragColor = vpos;
 }
 ]],
-	}:useNone()
---DEBUG(gl):glreport'here'
+			uniforms = {
+				postex = 0,
+				veltex = 1,
+			},
+		},
+		geometry = self.quadGeom,
+	}
 
-	simVelShader = GLKernelProgram{
-		gl3 = true,
-		texs = {'postex','veltex'};
-		code = template([[
+	simVelObj = GLSceneObject{
+		program = {
+			version = 'latest',
+			precision = 'best',
+			vertexCode = [[
+uniform mat4 mvProjMat;
+in vec2 vertex;
+out vec2 pos;
+void main() {
+	pos = vertex;
+	gl_Position = mvProjMat * vec4(vertex * 2. - 1., 0., 1.);
+}
+]],
+			fragmentCode = template([[
+in vec2 pos;
+out vec4 fragColor;
+uniform sampler2D postex, veltex;
 uniform float dt, gravConst, gravDistEpsilon;
 void main() {
 	vec4 vpos = texture(postex, pos);
@@ -310,196 +336,123 @@ void main() {
 	vvel.xyz += accumforce * dt;
 	fragColor = vvel;
 }
-]],		{
-			fieldDim = clnumber(fieldDim),
-		}),
-	}:useNone()
---DEBUG(gl):glreport'here'
+]],			{
+				fieldDim = clnumber(fieldDim),
+			}),
+			uniforms = {
+				postex = 0,
+				veltex = 1,
+			},
+		},
+		geometry = self.quadGeom,
+	}
 
-	displayShader = GLProgram{
-		version = 'latest',
-		vertexCode = [[
+	local uvCPUMem = dataFromLambda(fieldDim, fieldDim, gl.GL_RGBA, gl.GL_FLOAT, function(i,j)
+		return (i+.5)/fieldDim, (j+.5)/fieldDim
+	end)
+	displayObj = GLSceneObject{
+		program = {
+			version = 'latest',
+			vertexCode = [[
 uniform sampler2D posTex, velTex;
 uniform mat4 mvProjMat;
-in vec2 uv;
+uniform int fieldDim;
+//in vec2 vertex;
 out float magn;
 void main() {
-	vec4 pos4 = texture(posTex, uv);
-	vec4 vel = texture(velTex, uv);
+	vec2 vertex = vec2(
+		(float(gl_VertexID % fieldDim) + .5) / float(fieldDim),
+		(float(gl_VertexID / fieldDim) + .5) / float(fieldDim)
+	);
+	vec4 pos4 = texture(posTex, vertex);
+	vec4 vel = texture(velTex, vertex);
 	vec4 pos = vec4(pos4.xyz, 1.);
 	magn = length(vel.xyz);//length(pos.xyz);
 	gl_Position = mvProjMat * pos;
 }
 ]],
-		fragmentCode = [[
+			fragmentCode = [[
 uniform float displayScale;
-uniform sampler1D gradTex;
+uniform sampler2D gradTex;
 in float magn;
-out vec4 color;
+out vec4 fragColor;
 void main() {
-	color = texture(gradTex, magn * displayScale);
+	fragColor = texture(gradTex, vec2(magn * displayScale, .5));
 }
 ]],
-		uniforms = {
-			posTex = 0,
-			velTex = 1,
-			gradTex = 2,
-		},
-		-- [[
-		attrs = {
-			uv = {
-				buffer = uvBuf,
+			uniforms = {
+				posTex = 0,
+				velTex = 1,
+				gradTex = 2,
 			},
 		},
-		--]]
-		--[[
-		attrLocs = {
-			uv = 0,
-		},
-		--]]
-	}:useNone()
---DEBUG(gl):glreport'here'
-
-	-- used for drawing fbo to screen
-	quadScreenObj = GLSceneObject{
-		program = simPosShader,
-		geometry = 	{
-			mode = gl.GL_TRIANGLE_STRIP,
+		geometry = {
+			mode = gl.GL_POINTS,
+			count = count,
 		},
 		vertexes = {
 			dim = 2,
-			data = {
-				0, 0,
-				1, 0,
-				0, 1,
-				1, 1,
-			}
+			size = ffi.sizeof'vec2f_t' * count,
+			count = count,
+			usage = gl.GL_STATIC_DRAW,
+			data = uvCPUMem,
 		},
 	}
 
 	gl.glDisable(gl.GL_DEPTH_TEST)
---DEBUG(gl):glreport'here'
 	gl.glDisable(gl.GL_CULL_FACE)
---DEBUG(gl):glreport'here'
-end
-
-local viewport = vec4f()
-
--- the default one is based on GL1
--- this is for GL3, to go along with the "gl3=true" GLKernelProgram
-local function drawScreenQuad()
---DEBUG(gl):glreport'here'
-	quadScreenObj:draw()
---DEBUG(gl):glreport'here'
 end
 
 function App:update(...)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
---DEBUG(gl):glreport'here'
-
-
---	gl.glEnable(gl.GL_TEXTURE_2D)
-
-	gl.glGetFloatv(gl.GL_VIEWPORT, viewport.s)
---DEBUG(gl):glreport'here'
-	gl.glViewport(0,0,fieldDim,fieldDim)
---DEBUG(gl):glreport'here'
+glreport'here'
 
 	if update then
+		gl.glViewport(0, 0, fieldDim, fieldDim)
 		-- TODO instead of swapping color attachments
 		-- how about binding the current pos and vel at the same time?
 		-- and combining their update shaders?
---DEBUG(gl):glreport'here'
 		velTexs:swap()
---DEBUG(gl):glreport'here'
 		velTexs:draw{
-			shader=simVelShader,
-			texs={posTexs:cur(), velTexs:prev()},
-			uniforms={dt=dt, gravConst=gravConst, gravDistEpsilon=gravDistEpsilon},
-			callback=drawScreenQuad,
+			callback=function()
+				gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+				simVelObj.texs[1] = posTexs:prev()
+				simVelObj.texs[2] = velTexs:prev()
+				simVelObj.uniforms.dt = dt
+				simVelObj.uniforms.gravConst = gravConst
+				simVelObj.uniforms.gravDistEpsilon = gravDistEpsilon
+				simVelObj.uniforms.mvProjMat = self.pingPongProjMat.ptr
+				simVelObj:draw()
+			end,
 		}
---DEBUG(gl):glreport'here'
 		posTexs:swap()
---DEBUG(gl):glreport'here'
 		posTexs:draw{
-			shader=simPosShader,
-			texs={posTexs:prev(), velTexs:prev()},
-			uniforms={dt=dt},
-			callback=drawScreenQuad,
+			callback=function()
+				gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+				simPosObj.texs[1] = posTexs:prev()
+				simPosObj.texs[2] = velTexs:prev()
+				simPosObj.uniforms.dt = dt
+				simPosObj.uniforms.mvProjMat = self.pingPongProjMat.ptr
+				simPosObj:draw()
+			end,
 		}
---DEBUG(gl):glreport'here'
 	end
---DEBUG(gl):glreport'here'
-	gl.glViewport(viewport:unpack())
---DEBUG(gl):glreport'here'
 
---	gl.glDisable(gl.GL_TEXTURE_2D)
-
---[[
-	velTexs:cur():bind()
-	drawScreenQuad()
-	velTexs:cur():unbind()
---]]
---[[
-	gl.glPushMatrix()
-	gl.glTranslate(-1,0,0)
-	posTexs:cur():bind()
-	drawScreenQuad()
-	posTexs:cur():unbind()
-	gl.glPopMatrix()
---]]
-
+	gl.glViewport(0, 0, self.width, self.height)
 
 	self.view:setup(self.width / self.height)
 
 	gl.glPointSize(pointSize)
 
-	displayShader:use()
-	gl.glUniformMatrix4fv(displayShader.uniforms.mvProjMat.loc, 1, false, self.view.mvProjMat.ptr)
-	gl.glUniform1f(displayShader.uniforms.displayScale.loc, displayScale)
+	displayObj.uniforms.mvProjMat = self.view.mvProjMat.ptr
+	displayObj.uniforms.fieldDim = fieldDim
+	displayObj.uniforms.displayScale = displayScale
+	displayObj.texs[1] = posTexs:cur()
+	displayObj.texs[2] = velTexs:cur()
+	displayObj.texs[3] = gradTex
+	displayObj:draw()
 
-	posTexs:cur():bind(0)
---	velTexs:cur():bind(1)
---	gradTex:bind(2)
-
---[[
-	uvBuf:bind()
-	gl.glEnableVertexAttribArray(0)
-	--displayShader.vao:bind()
-	gl.glDrawArrays(gl.GL_POINTS, 0, count)
-	gl.glDisableVertexAttribArray(0)
-	uvBuf:unbind()
---]]
--- [[
-	uvBuf:bind()
-
---	gl.glEnableClientState(gl.GL_VERTEX_ARRAY)
---	displayShader.vao:bind()
---	gl.glVertexPointer(2, gl.GL_FLOAT, ffi.sizeof'vec2f_t', nil)
-
-	gl.glDrawArrays(gl.GL_POINTS, 0, count)
-
---	displayShader.vao:unbind()
---	gl.glDisableClientState(gl.GL_VERTEX_ARRAY)
-	uvBuf:unbind()
---]]
---[[
-	gl.glBegin(gl.GL_POINTS)
-	for i=0,count-1 do
-		gl.glVertex2f(uvCPUMem[0 + 2 * i], uvCPUMem[1 + 2 * i])
-	end
-	gl.glEnd()
---]]
-
-	GLTex1D:unbind(2)
-	GLTex2D:unbind(1)
---	GLTex2D:unbind(0)
---
-	displayShader:useNone()
---DEBUG(gl):glreport'here'
 	gl.glPointSize(1)
---DEBUG(gl):glreport'here'
-
 
 
 	--[=[ grid
@@ -565,6 +518,7 @@ function App:event(event, ...)
 end
 
 function App:updateGUI()
+	if ig.igButton'reset' then reset() end
 	ig.luatableInputFloatAsText('dt', _G, 'dt')
 	ig.luatableInputFloatAsText('G', _G, 'gravConst')
 	ig.luatableInputFloatAsText('displayScale', _G, 'displayScale')	-- TODO could auto determine if I wanted to add some reduce kernels ... migth do reduce kernels just for the gravitation COM ...
