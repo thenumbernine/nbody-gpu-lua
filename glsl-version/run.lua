@@ -16,7 +16,7 @@ local GLPingPong = require 'gl.pingpong'
 local GLGeometry = require 'gl.geometry'
 local GLSceneObject = require 'gl.sceneobject'
 local glreport = require 'gl.report'
-local clnumber = require 'cl.obj.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
+local glnumber = require 'gl.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
 local ig = require 'imgui'
 local matrix_ffi = require 'matrix.ffi'
 local vec2i = require 'vec-ffi.vec2i'
@@ -382,7 +382,7 @@ void main() {
 	velFragColor = vvel;
 }
 ]],			{
-				fieldDim = clnumber(fieldDim),
+				fieldDim = glnumber(fieldDim),
 			}),
 			uniforms = {
 				postex = 0,
