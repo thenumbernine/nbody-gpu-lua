@@ -6,6 +6,7 @@ local op = require 'ext.op'
 local math = require 'ext.math'
 local assert = require 'ext.assert'
 local table = require 'ext.table'
+local range = require 'ext.range'
 local vector = require 'ffi.cpp.vector-lua'
 local template = require 'template'
 local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
@@ -22,6 +23,7 @@ local vec2i = require 'vec-ffi.vec2i'
 local vec2f = require 'vec-ffi.vec2f'
 local vec3f = require 'vec-ffi.vec3f'
 local vec4f = require 'vec-ffi.vec4f'
+local vec3d = require 'vec-ffi.vec3d'
 
 local App = require 'imgui.appwithorbit'()
 
@@ -118,20 +120,23 @@ G = 4.81170511702339376292059114348376169800758361816406e-1
 so our "gravitation parameter" G_orbit = G * mass_in_kg * orbit_time_in_s^2 / orbit_dist_in_m^3
 --]]
 dt = 1
---gravConst = 4.8088480226311e-10	-- in sun units
-gravConst = 1e-10
+gravConst = 4.8088480226311e-10	-- in sun units
 --gravConst = 1.185609940161901e-4	-- Earth orbit units
 --gravConst = .5	-- Moon orbit units
 
---displayScale = 500
-displayScale = 200
+displayScale = 100
 pointSize = 2
 --gravDistEpsilon = 1e-7
 --gravDistEpsilon = 1e-3
 gravDistEpsilon = 1e-1
 
-r0min = 1
-r0max = 2
+r0min = .1
+r0max = 10
+m0min = .1
+m0max = 1
+--m0max = 3
+--m0max = 10
+rbins = range(1024):mapi(function() return 0 end)	-- bin integrate particles here
 
 math.randomseed(os.time())
 
@@ -139,9 +144,13 @@ local function reset()
 	local posData = vector('vec4f_t', count)
 	local velData = vector('vec4f_t', count)
 
+	local log10m0min = math.log(m0min, 10)
+	local log10m0max = math.log(m0max, 10)
+
 	local totalMass = 0
-	local posv = ffi.cast('vec4f_t*', posData.v)	-- TODO cast within vector:begin() ?
-	local velv = ffi.cast('vec4f_t*', velData.v)	-- TODO cast within vector:begin() ?
+	local com = vec3d()
+	local posv = posData.v+0
+	local velv = velData.v+0
 	for i=0,count-1 do
 --[[
 		return (u+.5)/fieldDim*2-1,(v+.5)/fieldDim*2-1, 0, 0
@@ -159,25 +168,32 @@ local function reset()
 -- [[
 		local r = math.random() * (r0max - r0min) + r0min
 		local phi = math.random() * 2 * math.pi
-		local z = .1 * (math.random() * 2 - 1) * math.exp(-r*r)
 		posv[0].x = math.cos(phi) * r
 		posv[0].y = math.sin(phi) * r
-		posv[0].z = z
-		local mass = 10^(math.random() * 2 - 1)
+		posv[0].z = (math.random() * 2 - 1) * math.exp(-r*r)
+		local mass = 10^(math.random() * (log10m0max - log10m0min) + log10m0min)	-- TODO distribution?
 		posv[0].w = mass
 		totalMass = totalMass + mass
+		com = com + mass * vec3d(posv[0].x, posv[0].y, posv[0].z)
+
+		local bin = math.floor((1 - 1e-9) * (r - r0min) / (r0max - r0min) * #rbins) + 1
+		rbins[bin] = rbins[bin] + mass
 --]]
 
 		posv = posv + 1
 		velv = velv + 1
 	end
+	com = com * (1 / totalMass)
 
-	local posv = ffi.cast('vec4f_t*', posData.v)	-- TODO cast within vector:begin() ?
-	local velv = ffi.cast('vec4f_t*', velData.v)	-- TODO cast within vector:begin() ?
+	local posv = posData.v+0
+	local velv = velData.v+0
 	for i=0,count-1 do
 		-- Kepler's 1-2-3 law
 		-- G m_sum = omega^2 r^3
-		local r = math.sqrt(posv[0].x * posv[0].x + posv[0].y * posv[0].y)
+		--local rvec = vec3d(posv[0].x, posv[0].y, posv[0].z) - com
+		--local r = rvec:length()
+		local rvec = vec3d(posv[0].x, posv[0].y, posv[0].z)	-- just assume origin is center
+		local r = rvec:length()
 
 		-- P^2 = (2 pi)^2 / (G (m1 + m2)) a^3
 		-- (P / 2 pi)^2 = a^3 / (G (m1 + m2))
@@ -189,11 +205,20 @@ local function reset()
 		-- yes but
 		-- the galaxy rotation curve doesn't follow the 1-2-3 law.
 		-- it does up to some inner radius and the it falls back down to zero
-		local omega = math.sqrt(gravConst * totalMass / (r * r * r))
-omega = omega * .6	-- hmm it is starting too fast ...
-		velv[0].x = -omega * posv[0].y
-		velv[0].y = omega * posv[0].x
-		velv[0].z = 0
+		-- totalMass, bodyMass or mass within radius?
+		local bin = math.floor((1 - 1e-9) * (r - r0min) / (r0max - r0min) * #rbins) + 1
+		local massSum = 0
+		--for i=1,bin do
+		for i=1,bin-1 do
+			massSum = massSum + rbins[bin]
+		end
+		--local omega = math.sqrt(gravConst * posv[0].w / r) / r
+		--local omega = math.sqrt(gravConst * totalMass / r) / r
+		local omega = math.sqrt(gravConst * massSum / r) / r
+omega = omega * .5
+		velv[0].x = -omega * rvec.y
+		velv[0].y = omega * rvec.x
+		velv[0].z = 0	-- -rvec.z		-- ... omega or something?
 		velv[0].w = 0
 
 		posv = posv + 1
@@ -238,8 +263,8 @@ function App:initGL(...)
 	gl.glEnable(gl.GL_DEBUG_OUTPUT)
 --]]
 
-	self.view.znear = .1
-	self.view.zfar = 100
+	self.view.znear = 1
+	self.view.zfar = 1000
 
 	reset()
 
@@ -344,8 +369,7 @@ void main() {
 			float othermass = otherpos.w;
 			vec3 del = otherpos.xyz - vpos.xyz;
 			float len = length(del);
-			len = max(len, gravDistEpsilon);
-			float invlen = 1. / len;
+			float invlen = 1. / (len + gravDistEpsilon);
 			del *= invlen;
 			del *= invlen;
 			del *= invlen;
