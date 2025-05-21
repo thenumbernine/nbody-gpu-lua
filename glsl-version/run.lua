@@ -130,7 +130,7 @@ pointSize = 2
 --gravDistEpsilon = 1e-3
 gravDistEpsilon = 1e-1
 
-r0min = 1
+r0min = .1
 r0max = 2
 
 math.randomseed(os.time())
@@ -186,8 +186,10 @@ local function reset()
 		-- G (m1 + m2) = omega^2 * a^3
 		-- vel = i r omega cis (omega t) = i omega pos
 		-- by the 1-2-3 law: G (m1 + m2) = omega^2 * a^3 => omega = sqrt(G (m1 + m2) / a^3)
-		local omega = math.sqrt(gravConst * totalMass / (r * r * r))
-omega = omega * .6	-- hmm it is starting too fast ...
+		-- yes but
+		-- the galaxy rotation curve doesn't follow the 1-2-3 law.
+		-- it does up to some inner radius and the it falls back down to zero
+		local omega = math.sqrt(gravConst * totalMass / (1 + r * r * r))
 		velv[0].x = -omega * posv[0].y
 		velv[0].y = omega * posv[0].x
 		velv[0].z = 0
@@ -197,17 +199,18 @@ omega = omega * .6	-- hmm it is starting too fast ...
 		velv = velv + 1
 	end
 
-	fbo = FBO()
-	-- hmm this is FBO state, so I should move this to FBO?
-	local colorBuffers = ffi.new('GLenum[2]', {
-		gl.GL_COLOR_ATTACHMENT0,
-		gl.GL_COLOR_ATTACHMENT1,
-	})
-	gl.glDrawBuffers(2, colorBuffers)
-	fbo:unbind()
+	fbo = FBO():unbind()
 
 	posTexs = createFieldPingPong{data = posData.v, fbo=fbo}
 	velTexs = createFieldPingPong{data = velData.v, fbo=fbo}
+
+	fbo:bind()
+		:setColorAttachmentTex2D(posTexs.hist[1].id, 0)
+		:setColorAttachmentTex2D(velTexs.hist[1].id, 1)
+		:setColorAttachmentTex2D(posTexs.hist[2].id, 2)
+		:setColorAttachmentTex2D(velTexs.hist[2].id, 3)
+		:check()
+		:unbind()
 end
 
 App.viewDist = 2
@@ -442,6 +445,7 @@ end
 -- I'll just throw glPointSize and gl_PointSize at it and one is bound to work
 local hasGLPointSize = op.safeindex(gl, 'glPointSize')
 
+local drawBufs = ffi.new'GLenum[2]'
 local updateStart = 0
 function App:update(...)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
@@ -450,13 +454,21 @@ glreport'here'
 	if update then
 		gl.glViewport(0, 0, fieldDim, fieldDim)
 
+		-- hmm instead of swap and re-attach ... can I just ... idk ... somehow not re-attach?
+		-- I guess it's either this or exchange the setDrawBuffers() between color attachments 0&1 and 2&3 ...
 		posTexs:swap()
 		velTexs:swap()
 
 		fbo:bind()
-		fbo:setColorAttachmentTex2D(posTexs:cur().id, 0)
-		fbo:setColorAttachmentTex2D(velTexs:cur().id, 1)
-		FBO:check()
+		if posTexs:prev() == posTexs.hist[1] then
+			drawBufs[0] = gl.GL_COLOR_ATTACHMENT2
+			drawBufs[1] = gl.GL_COLOR_ATTACHMENT3
+		else
+			drawBufs[0] = gl.GL_COLOR_ATTACHMENT0
+			drawBufs[1] = gl.GL_COLOR_ATTACHMENT1
+		end
+		fbo:setDrawBuffers(2, drawBufs)
+		fbo:check()
 		simObj.texs[1] = posTexs:prev()
 		simObj.texs[2] = velTexs:prev()
 		simObj.uniforms.dt = dt
