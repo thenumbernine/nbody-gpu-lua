@@ -597,8 +597,8 @@ end
 
 function App:event(event, ...)
 	App.super.event(self, event, ...)
-	if event[0].type == sdl.SDL_KEYDOWN then
-		if event[0].key.keysym.sym == ('r'):byte() then
+	if event[0].type == sdl.SDL_EVENT_KEY_DOWN then
+		if event[0].key.key == ('r'):byte() then
 			reset()
 		end
 	end
