@@ -12,7 +12,7 @@ local template = require 'template'
 local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
 local GLTypes = require 'gl.types'
 local GLGradientTex2D = require 'gl.gradienttex2d'
-local FBO = require 'gl.fbo'
+local GLFramebuffer = require 'gl.framebuffer'
 local GLPingPong = require 'gl.pingpong'
 local GLGeometry = require 'gl.geometry'
 local GLSceneObject = require 'gl.sceneobject'
@@ -227,7 +227,7 @@ omega = omega * .5
 		velv = velv + 1
 	end
 
-	fbo = FBO()
+	fbo = GLFramebuffer()
 		:drawBuffers(
 			gl.GL_COLOR_ATTACHMENT0,
 			gl.GL_COLOR_ATTACHMENT1)
@@ -482,7 +482,7 @@ glreport'here'
 		fbo:bind()
 		fbo:setColorAttachmentTex2D(posTexs:cur().id, 0)
 		fbo:setColorAttachmentTex2D(velTexs:cur().id, 1)
-		FBO:check()
+		GLFramebuffer:check()
 		simObj.texs[1] = posTexs:prev()
 		simObj.texs[2] = velTexs:prev()
 		simObj.uniforms.dt = dt
@@ -507,7 +507,7 @@ glreport'here'
 			updateStart = updateEnd
 		end
 
-		FBO:unbind()
+		GLFramebuffer:unbind()
 	end
 
 	gl.glViewport(0, 0, self.width, self.height)
