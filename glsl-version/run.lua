@@ -10,6 +10,7 @@ local range = require 'ext.range'
 local vector = require 'ffi.cpp.vector-lua'
 local template = require 'template'
 local gl = require 'gl.setup'(cmdline.gl or 'OpenGL')
+local GLTypes = require 'gl.types'
 local GLGradientTex2D = require 'gl.gradienttex2d'
 local FBO = require 'gl.fbo'
 local GLPingPong = require 'gl.pingpong'
@@ -43,9 +44,10 @@ local channelsPerFormat = {
 }
 
 local function dataFromLambda(width, height, format, gltype, callback)
-	local ctype = assert.index(require 'gl.types'.ctypeForGLType, gltype, "couldn't determine size of type")
+	local ctype = assert.index(GLTypes.ctypeForGLType, gltype, "couldn't determine size of type")
 	local numChannels = assert.index(channelsPerFormat, format, "couldn't determine channels for format")
-	local ptr = ffi.new(ctype..'[?]', width * height * numChannels)
+	local arrayType = ffi.typeof('$['..(width * height * numChannels)..']', ctype)
+	local ptr = ffi.new(arrayType)
 	for j=0,height-1 do
 		for i=0,width-1 do
 			local e = i + width * j
@@ -226,13 +228,10 @@ omega = omega * .5
 	end
 
 	fbo = FBO()
-	-- hmm this is FBO state, so I should move this to FBO?
-	local colorBuffers = ffi.new('GLenum[2]', {
-		gl.GL_COLOR_ATTACHMENT0,
-		gl.GL_COLOR_ATTACHMENT1,
-	})
-	gl.glDrawBuffers(2, colorBuffers)
-	fbo:unbind()
+		:setDrawBuffers(
+			gl.GL_COLOR_ATTACHMENT0,
+			gl.GL_COLOR_ATTACHMENT1)
+		:unbind()
 
 	posTexs = createFieldPingPong{data = posData.v, fbo=fbo}
 	velTexs = createFieldPingPong{data = velData.v, fbo=fbo}
