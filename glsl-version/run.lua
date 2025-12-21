@@ -228,7 +228,7 @@ omega = omega * .5
 	end
 
 	fbo = FBO()
-		:setDrawBuffers(
+		:drawBuffers(
 			gl.GL_COLOR_ATTACHMENT0,
 			gl.GL_COLOR_ATTACHMENT1)
 		:unbind()
