@@ -19,7 +19,6 @@ local GLSceneObject = require 'gl.sceneobject'
 local glreport = require 'gl.report'
 local glnumber = require 'gl.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
 local ig = require 'imgui'
-local matrix_ffi = require 'matrix.ffi'
 local vec2i = require 'vec-ffi.vec2i'
 local vec2f = require 'vec-ffi.vec2f'
 local vec3f = require 'vec-ffi.vec3f'
@@ -295,8 +294,6 @@ function App:initGL(...)
 --]]
 		false
 	):unbind()
-
-	self.pingPongProjMat = matrix_ffi({4,4}, 'float'):zeros():setOrtho(-1, 1, -1, 1, -1, 1)
 
 	self.quadGeom = GLGeometry{
 		mode = gl.GL_TRIANGLE_STRIP,

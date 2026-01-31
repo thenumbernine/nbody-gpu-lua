@@ -17,7 +17,6 @@ deps = {
 	"ffi",
 	"gl",
 	"imgui",
-	"matrix",
 	"sdl",
 	"template",
 	"vec-ffi",
