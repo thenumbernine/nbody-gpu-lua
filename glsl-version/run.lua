@@ -142,8 +142,8 @@ rbins = range(1024):mapi(function() return 0 end)	-- bin integrate particles her
 math.randomseed(os.time())
 
 local function reset()
-	local posData = vector('vec4f_t', count)
-	local velData = vector('vec4f_t', count)
+	local posData = vector('vec4f', count)
+	local velData = vector('vec4f', count)
 
 	local log10m0min = math.log(m0min, 10)
 	local log10m0max = math.log(m0max, 10)
@@ -451,7 +451,7 @@ void main() {
 		},
 		vertexes = {
 			dim = 2,
-			size = ffi.sizeof'vec2f_t' * count,
+			size = ffi.sizeof'vec2f' * count,
 			count = count,
 			usage = gl.GL_STATIC_DRAW,
 			data = uvCPUMem,

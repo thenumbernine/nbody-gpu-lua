@@ -30,7 +30,7 @@ function App:initGL(...)
 	self.view.znear = .01
 	self.view.zfar = 10
 
-	self.posCPUMem = vector'vec4f_t'
+	self.posCPUMem = vector'vec4f'
 
 	self.env = CLEnv{
 		precision = 'float',
@@ -43,7 +43,7 @@ function App:initGL(...)
 self.env.useGLSharing = false
 
 	self.positionVBO = GLArrayBuffer{
-		size = ffi.sizeof'vec4f_t' * count,
+		size = ffi.sizeof'vec4f' * count,
 		usage = gl.GL_DYNAMIC_DRAW,
 	}:unbind()
 
@@ -51,13 +51,13 @@ self.env.useGLSharing = false
 		error"haven't got gl sharing yet"
 --		self.posMem = cl::BufferGL(clCommon->context, CL_MEM_WRITE_ONLY, self.positionVBO.id)
 	else
-		self.posMem = self.env:buffer{type='vec4f_t', count=count}
+		self.posMem = self.env:buffer{type='vec4f', count=count}
 		self.posCPUMem:resize(count)
 	end
 
 	local headerCode = table{
 		[[
-typedef vec3f_t real3;
+typedef vec3f real3;
 
 typedef struct body_t {
 	real3 pos;
@@ -232,7 +232,7 @@ self.objsMem
 
 		self.positionVBO
 			:bind()
-			:updateData(0, ffi.sizeof'vec4f_t' * count, self.posCPUMem.v)
+			:updateData(0, ffi.sizeof'vec4f' * count, self.posCPUMem.v)
 			:unbind()
 		gl.glFinish()
 	end
