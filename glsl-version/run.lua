@@ -16,7 +16,6 @@ local GLFramebuffer = require 'gl.framebuffer'
 local GLPingPong = require 'gl.pingpong'
 local GLGeometry = require 'gl.geometry'
 local GLSceneObject = require 'gl.sceneobject'
-local glreport = require 'gl.report'
 local glnumber = require 'gl.number'	-- TODO since gl needs this too, and cl depends on gl for interop, how about move this to gl?
 local ig = require 'imgui'
 local vec2i = require 'vec-ffi.vec2i'
@@ -468,7 +467,6 @@ local hasGLPointSize = op.safeindex(gl, 'glPointSize')
 local updateStart = 0
 function App:update(...)
 	gl.glClear(gl.GL_COLOR_BUFFER_BIT)
-glreport'here'
 
 	if update then
 		gl.glViewport(0, 0, fieldDim, fieldDim)

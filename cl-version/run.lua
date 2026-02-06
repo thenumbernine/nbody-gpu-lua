@@ -8,7 +8,6 @@ local gl = require 'gl.setup'(cmdline.gl)
 local GLProgram = require 'gl.program'
 local GLTex2D = require 'gl.tex2d'
 local GLArrayBuffer = require 'gl.arraybuffer'
-local glreport = require 'gl.report'
 local CLEnv = require 'cl.obj.env'
 local vec2i = require 'vec-ffi.vec2i'
 local vec3f = require 'vec-ffi.vec3f'
