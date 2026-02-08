@@ -1,7 +1,7 @@
 #!/usr/bin/env luajit
 local cmdline = require 'ext.cmdline'(...)
 local ffi = require 'ffi'
-local vector = require 'ffi.cpp.vector-lua'
+local vector = require 'stl.vector-lua'
 local table = require 'ext.table'
 local path = require 'ext.path'
 local gl = require 'gl.setup'(cmdline.gl)
